@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/4.0.3/pixi.js"></script>
+  <title>Elf Jump!</title>
+</head>
+<body>
+<canvas
+  id="root-canvas"
+  height="1920"
+  width="1080"
+  style="width: 100vw; height: 100vh">
+</canvas>
+
+<script type="text/javascript">
+
+var getTickerDt = function(ticker) {
+  var ms = Math.min(ticker.elapsedMS, ticker._maxElapsedMS);
+  return ms / 1000 * ticker.speed;
+};
+
+var HEIGHT = 1920;
+var WIDTH = 1080;
+
+var canvas = document.getElementById('root-canvas');
+var resolution = document.devicePixelRatio;
+
+var renderer = new PIXI.WebGLRenderer(WIDTH, HEIGHT, {
+  view: canvas,
+  resolution: resolution
+});
+
+var update = function (dt) {
+};
+
+var run = function() {
+  update(getTickerDt(PIXI.ticker.shared));
+};
+
+PIXI.ticker.shared.add(run)s
+
+
+</script>
+</body>
+</html>
