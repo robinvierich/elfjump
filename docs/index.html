@@ -7,8 +7,8 @@
 <body>
 <canvas
   id="root-canvas"
-  height="1920"
-  width="1080"
+  height="1080"
+  width="1920"
   style="width: 100vw; height: 100vh">
 </canvas>
 
@@ -19,26 +19,127 @@ var getTickerDt = function(ticker) {
   return ms / 1000 * ticker.speed;
 };
 
-var HEIGHT = 1920;
-var WIDTH = 1080;
+var HEIGHT = 1080;
+var WIDTH = 1920;
 
-var canvas = document.getElementById('root-canvas');
-var resolution = document.devicePixelRatio;
+var eventQueue = [];
 
-var renderer = new PIXI.WebGLRenderer(WIDTH, HEIGHT, {
-  view: canvas,
-  resolution: resolution
-});
+var processInput = function(sceneIndex) {
+  var event = eventQueue.shift();
 
-var update = function (dt) {
+  switch (event.type) {
+    case 'keyup':
+      // check for ornament type
+      // see if possible to jump to ornament
+      // if so, jump to ornament
+  }
+}
+
+var update = function (dt, sceneIndex) {
+
 };
 
-var run = function() {
-  update(getTickerDt(PIXI.ticker.shared));
+var setupElf = function(elf) {
+  elf.x = WIDTH / 2;
+  elf.y = HEIGHT;
 };
 
-PIXI.ticker.shared.add(run);
+var setupScene = function(sceneIndex) {
+  setupElf(sceneIndex.elf);
+};
 
+var run = function(renderer, sceneIndex) {
+  update(getTickerDt(PIXI.ticker.shared), sceneIndex);
+  renderer.render(sceneIndex.root);
+};
+
+var startGame = function(renderer, sceneIndex) {
+  setupScene(sceneIndex);
+  PIXI.ticker.shared.add(run.bind(null, renderer, sceneIndex));
+};
+
+var ASSET_PATHS = {
+  BG: 'images/bg.jpg',
+  ELF: 'images/elfboy.jpg',
+}
+
+// returns an index of {name: element}
+var buildSceneGraph = function() {
+
+  var root = new PIXI.Container();
+
+    var bg = PIXI.Sprite.fromFrame(ASSET_PATHS.BG);
+    bg.width = WIDTH;
+    bg.height = HEIGHT;
+    root.addChild(bg);
+
+    var elf = PIXI.Sprite.fromFrame(ASSET_PATHS.ELF);
+    elf.scale.set(0.5);
+    elf.anchor.set(0.5, 1); // anchor at feet
+    root.addChild(elf);
+
+    var ornamentContainer =  new PIXI.Container();
+    root.addChild(ornamentContainer);
+
+  return {
+    root: root,
+    bg: bg,
+    elf: elf
+  };
+};
+
+var addKeyHandlers = function(canvas) {
+  canvas.addEventListener('keydown', function(e) {
+    // push keydown event to event queue
+    eventQueue.push({type: 'keydown', data: e});
+  });
+
+  canvas.addEventListener('keyup', function() {
+    // push keyup event to event queue
+    eventQueue.push({type: 'keyup', data: e});
+  });
+};
+
+var load = function() {
+  return new Promise(function(resolve, reject){
+    var loader = new PIXI.loaders.Loader();
+
+    for (let reference in ASSET_PATHS) {
+      loader.add(ASSET_PATHS[reference]);
+    }
+
+    loader.once('complete', resolve);
+    loader.once('error', reject);
+
+    loader.load();
+  });
+};
+
+var init = function() {
+  var canvas = document.getElementById('root-canvas');
+  var resolution = document.devicePixelRatio;
+
+  var renderer = new PIXI.WebGLRenderer(WIDTH, HEIGHT, {
+    view: canvas,
+    resolution: resolution
+  });
+
+  load()
+  .then(function() {
+    // build scene
+    var sceneIndex = buildSceneGraph();
+    // add key handlers
+    addKeyHandlers(canvas);
+
+    startGame(renderer, sceneIndex);
+  })
+  .catch(function(e) {
+    window.console.error('error loading resources!');
+    window.console.error(e);
+  })
+};
+
+init();
 
 </script>
 </body>
