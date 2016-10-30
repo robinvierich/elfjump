@@ -4,15 +4,155 @@ var getTickerDt = function(ticker) {
   return ms / 1000 * ticker.speed;
 };
 
+var ASSET_PATHS = {
+    BG: 'images/bg.jpg',
+    ELF: 'images/elfboy.jpg',
+    ORNAMENT1: 'images/ornament1.jpg',
+    ORNAMENT2: 'images/ornament2.jpg',
+    ORNAMENT3: 'images/ornament3.jpg',
+    ORNAMENT4: 'images/ornament4.jpg'
+}
+
+var ORNAMENT_DATA = [
+  { position: { x: 600, y: 1650 }, assetPath: ASSET_PATHS.ORNAMENT1, type: 1 },
+  { position: { x: 800, y: 1600 }, assetPath: ASSET_PATHS.ORNAMENT2, type: 2 },
+  { position: { x: 700, y: 1500 }, assetPath: ASSET_PATHS.ORNAMENT3, type: 3 }
+];
+
+var startingOrnaments = [
+    ORNAMENT_DATA[0]
+];
+
+var edges = [
+    [ORNAMENT_DATA[0], ORNAMENT_DATA[1]],
+    [ORNAMENT_DATA[1], ORNAMENT_DATA[2]]
+];
+
 var HEIGHT = 1080;
 var WIDTH = 1920;
 
 var ELF_SPEED = 10000; // units/sec
 
 var eventQueue = [];
+var g_currOrnament = null;
+var g_elfJumpTweens = [];
+
+var EMPTY_LIST = [];
+
+var canJumpToOrnament = function(currOrnament, nextOrnament) {
+    for (var i = 0; i < edges.length; i++) {
+        var edge = edges[i];
+        
+        if ( edge.indexOf(currOrnament) !== -1 && edge.indexOf(nextOrnament) !== -1) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+var getAvailableOrnaments = function (currOrnament) {
+    if (currOrnament == null) {
+        return startingOrnaments;
+    }
+
+    var availableOrnaments = [];
+
+    for (var i = 0; i < edges.length; i++) {
+        var edge = edges[i];
+
+        var currOrnamentIndex = edge.indexOf(currOrnament);
+        if (currOrnamentIndex == -1) { continue; }
+
+        // Note: tightly coupled to edge data structure here
+        var otherOrnament = edge[(currOrnamentIndex + 1) % 2]
+        availableOrnaments.push(otherOrnament);
+    }
+
+    return availableOrnaments;
+}
+
+var linear = function(start, end, t) {
+  return start + (end - start) * t;
+}
+
+var createTween = function (obj, prop, start, end, duration, easingFunc, onComplete) {
+  onComplete = onComplete || null;
+
+  var tween =  {
+    obj: obj,
+    prop: prop,
+    start: start,
+    end: end,
+    duration: duration,
+    easingFunc: easingFunc,
+    onComplete: onComplete,
+    t: 0
+  };
+
+  return tween;
+};
+
+var updateTween = function (dt, tween) {
+  var obj = tween.obj;
+  var prop = tween.prop;
+
+  var newVal = tween.easingFunc(tween.start, tween.end, tween.t / tween.duration);
+  obj[prop] = newVal;
+
+  tween.t = Math.min(tween.t + dt, tween.duration);
+
+  if (tween.t >= tween.duration && tween.onComplete) {
+    tween.onComplete(tween);
+  }
+};
+
+var jumpToOrnament = function (elf, ornament) {
+  var duration = 2;
+
+  var xTween = createTween(elf, 'x', elf.position.x, ornament.position.x, duration, linear, function (tween) {
+    var tweenIdx = g_elfJumpTweens.indexOf(tween);
+    g_elfJumpTweens.splice(tweenIdx, 1);
+    g_currOrnament = ornament;
+  });
+  g_elfJumpTweens.push(xTween);
+
+  var yTween = createTween(elf, 'y', elf.position.y, ornament.position.y, duration, linear, function (tween) {
+    var tweenIdx = g_elfJumpTweens.indexOf(tween);
+    g_elfJumpTweens.splice(tweenIdx, 1);
+    g_currOrnament = ornament;
+  });
+  g_elfJumpTweens.push(yTween);
+};
+
+
+var getKeyForOrnament = function (ornament) {
+  return ornament.type.toString();
+};
+
+var isJumping = function () {
+  return g_elfJumpTweens.length > 0;
+}
 
 var processKeyDown = function(dt, event, sceneIndex) {
   var elf = sceneIndex.elf;
+
+  // TODO: Precalculate all of this stuff (keep the handler cheap + won't scale with graph size)
+  var availableOrnaments = isJumping() ? EMPTY_LIST : getAvailableOrnaments(g_currOrnament);
+
+  var keyToOrnamentMap = {};
+  for (var i = 0; i < availableOrnaments.length; i++) {
+    var ornament = availableOrnaments[i];
+    var key = getKeyForOrnament(ornament);
+
+    if (keyToOrnamentMap[key]) {
+      console.warn('WARNING! MULTIPLE ORNAMENTS FOUND FOR KEY ' + key);
+    }
+
+    keyToOrnamentMap[key] = ornament;
+  }
+
+  console.log("Available Keys: " + Object.keys(keyToOrnamentMap).toString());
 
   switch(event.key) {
     case 'ArrowUp':
@@ -30,6 +170,12 @@ var processKeyDown = function(dt, event, sceneIndex) {
     case 'ArrowRight':
       elf.x += dt * ELF_SPEED;
       break;
+    
+    default:
+      var ornament = keyToOrnamentMap[event.key];
+      if (!ornament) { break; }
+
+      jumpToOrnament(sceneIndex.elf, ornament);
   }
 }
 
@@ -96,7 +242,10 @@ var followElf = function(dt, sceneIndex) {
 var update = function (dt, sceneIndex) {
    processInput(dt, sceneIndex);
    followElf(dt, sceneIndex);
-   // "follow" elf with camera
+
+   for (var i = 0; i < g_elfJumpTweens.length; i++) {
+     updateTween(dt, g_elfJumpTweens[i]);
+   }
 };
 
 var run = function(renderer, sceneIndex) {
@@ -104,11 +253,11 @@ var run = function(renderer, sceneIndex) {
   renderer.render(sceneIndex.root);
 };
 
-var setupElf = function(elf, worldContainer) {
-  elf.scale.set(0.5);
+var setupElf = function(elf, bg) {
+  elf.scale.set(0.25);
   elf.anchor.set(0.5, 1); // anchor at feet
   elf.x = WIDTH / 2;
-  elf.y = HEIGHT;
+  elf.y = bg.height;
 };
 
 var setupBg = function(bg) {
@@ -117,18 +266,19 @@ var setupBg = function(bg) {
 
 var setupOrnaments = function(ornamentContainer) {
   ornamentContainer.children.forEach(function(ornament) {
-    ornament.anchor.set(0.5);
+      ornament.anchor.set(0.5);
+      ornament.scale.set(0.5);
   });
 };
 
 var setupCamera = function(worldContainer) {
   worldContainer.x = 0;
-  worldContainer.y = 0;
+  worldContainer.y = -worldContainer.height + HEIGHT;
 }
 
 var setupScene = function(sceneIndex) {
-  setupElf(sceneIndex.elf);
   setupBg(sceneIndex.bg);
+  setupElf(sceneIndex.elf, sceneIndex.bg);
   setupOrnaments(sceneIndex.ornamentContainer);
   setupCamera(sceneIndex.worldContainer);
 };
@@ -138,20 +288,7 @@ var startGame = function(renderer, sceneIndex) {
   PIXI.ticker.shared.add(run.bind(null, renderer, sceneIndex));
 };
 
-var ASSET_PATHS = {
-  BG: 'images/bg.jpg',
-  ELF: 'images/elfboy.jpg',
-  ORNAMENT1: 'images/ornament1.jpg',
-  ORNAMENT2: 'images/ornament2.jpg',
-  ORNAMENT3: 'images/ornament3.jpg',
-  ORNAMENT4: 'images/ornament4.jpg'
-}
 
-var ORNAMENT_DATA = [
-  {position: {x: 600, y: 600}, assetPath: ASSET_PATHS.ORNAMENT1},
-  {position: {x: 500, y: 700}, assetPath: ASSET_PATHS.ORNAMENT2},
-  {position: {x: 700, y: 700}, assetPath: ASSET_PATHS.ORNAMENT3}
-];
 
 // returns an index of {name: element}
 var buildSceneGraph = function() {
