@@ -31,6 +31,8 @@ var edges = [
 var HEIGHT = 1080;
 var WIDTH = 1920;
 
+var FPS = 60;
+
 var ELF_SPEED = 10000; // units/sec
 
 var eventQueue = [];
@@ -40,15 +42,15 @@ var g_elfJumpTweens = [];
 var EMPTY_LIST = [];
 
 var canJumpToOrnament = function(currOrnament, nextOrnament) {
-    for (var i = 0; i < edges.length; i++) {
-        var edge = edges[i];
+  for (var i = 0; i < edges.length; i++) {
+    var edge = edges[i];
         
-        if ( edge.indexOf(currOrnament) !== -1 && edge.indexOf(nextOrnament) !== -1) {
-            return true;
-        }
+    if ( edge.indexOf(currOrnament) !== -1 && edge.indexOf(nextOrnament) !== -1) {
+      return true;
     }
+  }
 
-    return false;
+  return false;
 }
 
 var getAvailableOrnaments = function (currOrnament) {
@@ -72,16 +74,101 @@ var getAvailableOrnaments = function (currOrnament) {
     return availableOrnaments;
 }
 
-var linear = function(start, end, t) {
+var linear = function(t, start, end) {
   return start + (end - start) * t;
-}
+};
 
-var createTween = function (obj, prop, start, end, duration, easingFunc, onComplete) {
+// var expoInOut = function(t, start, end) {
+//   if (t === 0) { return start; }
+//   if (t === 1) { return end; }
+
+//   var t2 = t * 2;
+
+//   if (t2 < 1) { 
+//     return ((end - start) / 2) * (Math.pow(2, 10 * (t2 - 1)) + start);
+//   } else {
+//     return ((end - start) / 2) * (-Math.pow(2, -10 * (t2 - 1)) + 2) + start; 
+//   }
+// };
+
+// var quadIn = function(t, start, end) {
+//   return (end - start) * (t * t) + start;
+// };
+
+// var quadOut = function(t, start, end) {
+//   return (start - end) * (t * (t - 2)) + start;
+// };
+
+// var quadOutIn = function(t, start, end) {
+//   var t2 = t * 2;
+
+//   if (t2 < 1) {
+//     return quadOut(t2, start, end / 2);
+//   } else {
+//     return quadIn(t2-1, end / 2, end);
+//   }
+// }
+
+// fast -> slow -> fast
+var lutEasing = function (lut, t) {
+  var idx = Math.floor(linear(t, 0, lut.length)); 
+  return lut[idx];
+};
+
+
+// var GRAVITY = 9.8;
+
+// var quad = function(t, start, end) {
+//   return (GRAVITY / 2) * (t * t) + (start - end + (GRAVITY / 2)) * t + start;
+// };
+
+
+var createJumpLut = function(startx, starty, endx, endy, duration) {
+  var t = 0;
+  var bezier = new Bezier(
+    startx, starty,
+    startx, starty - BEZIER_JUMP_HEIGHT,
+    endx, endy - BEZIER_JUMP_HEIGHT,
+    endx, endy
+  );3
+
+  var lut = new Array(Math.floor(duration * FPS));
+
+  for (var i = 0; i < duration * FPS; i++) {
+//    lut[i] = bezier.get(t / duration);
+    lut[i] = {
+      x: linear(t / duration, startx, endx),
+//       x: bezier.get(t / duration).x,//quad(t / duration, starty, endy)
+      y: bezier.get(t / duration).y//quad(t / duration, starty, endy)
+    }
+    t += (1 / FPS);
+    //t = quadOutIn(i/lut.length, 0, duration);
+    //t = quadOutIn(i/lut.length, 0, duration);
+  }
+
+  return lut;
+};
+
+var BEZIER_JUMP_HEIGHT = 150;
+// TODO: precalc all of these on startup and create LUTs for each edge direction
+var createJumpEasingFn = function (startX, startY, endX, endY, duration) {
+//   var bezier = new Bezier(
+//     startX, startY,
+//     startX, startY - BEZIER_JUMP_HEIGHT,
+//     endX, endY - BEZIER_JUMP_HEIGHT,
+//     endX, endY
+//   );
+
+  //return bezierEasing.bind(null, bezier.getLUT(FPS * duration));
+  return lutEasing.bind(null, createJumpLut(startX, startY, endX, endY, duration));
+};
+
+
+var createTween = function (obj, start, end, duration, easingFunc, onComplete) {
   onComplete = onComplete || null;
 
   var tween =  {
     obj: obj,
-    prop: prop,
     start: start,
     end: end,
     duration: duration,
@@ -95,11 +182,19 @@ var createTween = function (obj, prop, start, end, duration, easingFunc, onCompl
 
 var updateTween = function (dt, tween) {
   var obj = tween.obj;
-  var prop = tween.prop;
 
-  var newVal = tween.easingFunc(tween.start, tween.end, tween.t / tween.duration);
-  obj[prop] = newVal;
+  for (var prop in tween.end) {
+    if (!tween.end.hasOwnProperty(prop)) { continue; }
 
+    var newVal = tween.easingFunc(tween.t / tween.duration, tween.start[prop], tween.end[prop]);
+    // TODO: CLEAN UP THIS CHECK! There has to be a way..
+    if (newVal[prop]) {
+      obj[prop] = newVal[prop]; // assume newVal has same props as tween.start/end
+    } else {
+      obj[prop] = newVal;
+    }
+  }
+  
   tween.t = Math.min(tween.t + dt, tween.duration);
 
   if (tween.t >= tween.duration && tween.onComplete) {
@@ -108,21 +203,18 @@ var updateTween = function (dt, tween) {
 };
 
 var jumpToOrnament = function (elf, ornament) {
-  var duration = 2;
+  var duration = 0.5;
 
-  var xTween = createTween(elf, 'x', elf.position.x, ornament.position.x, duration, linear, function (tween) {
+  var bezierEasing = createJumpEasingFn(elf.x, elf.y, ornament.position.x, ornament.position.y, duration);
+
+  var startPoint = new PIXI.Point(elf.x, elf.y);
+
+  var xTween = createTween(elf.position, startPoint, ornament.position, duration, bezierEasing, function (tween) {
     var tweenIdx = g_elfJumpTweens.indexOf(tween);
     g_elfJumpTweens.splice(tweenIdx, 1);
     g_currOrnament = ornament;
   });
   g_elfJumpTweens.push(xTween);
-
-  var yTween = createTween(elf, 'y', elf.position.y, ornament.position.y, duration, linear, function (tween) {
-    var tweenIdx = g_elfJumpTweens.indexOf(tween);
-    g_elfJumpTweens.splice(tweenIdx, 1);
-    g_currOrnament = ornament;
-  });
-  g_elfJumpTweens.push(yTween);
 };
 
 
