@@ -16,20 +16,20 @@ var ASSET_PATHS = {
     }
 };
 
-var ORNAMENT_DATA = [
-  { position: { x: 600, y: 1650 }, assetPath: ASSET_PATHS.ORNAMENTS[1], type: 1 },
-  { position: { x: 900, y: 1600 }, assetPath: ASSET_PATHS.ORNAMENTS[2], type: 2 },
-  { position: { x: 700, y: 1400 }, assetPath: ASSET_PATHS.ORNAMENTS[3], type: 3 },
-];
+//var ORNAMENT_DATA = [
+//  { id: 0, position: { x: 600, y: 1650 }, assetPath: ASSET_PATHS.ORNAMENTS[1], type: 1 },
+//  { id: 1, position: { x: 900, y: 1600 }, assetPath: ASSET_PATHS.ORNAMENTS[2], type: 2 },
+//  { id: 2, position: { x: 700, y: 1400 }, assetPath: ASSET_PATHS.ORNAMENTS[3], type: 3 },
+//];
 
-var startingOrnaments = [
-    ORNAMENT_DATA[0]
-];
+//var startingOrnaments = [
+//    ORNAMENT_DATA[0]
+//];
 
-var edges = [
-    [ORNAMENT_DATA[0], ORNAMENT_DATA[1]],
-    [ORNAMENT_DATA[1], ORNAMENT_DATA[2]],
-];
+//var edges = [
+//    [ORNAMENT_DATA[0], ORNAMENT_DATA[1]],1
+//    [ORNAMENT_DATA[1], ORNAMENT_DATA[2]],
+//];
 
 var CANDY_CANE_DATA = [
   { position: { x: 800, y: 1500 }, assetPath: ASSET_PATHS.CANDY_CANE},
@@ -311,7 +311,7 @@ var serializeOrnament = function(ornamentSprite) {
       y: ornamentSprite.y
     },
     type: ornamentDatum.type,
-    assetPath: ornamentDatum.assetPath
+    assetPath: ornamentDatum.assetPath,
   };
 };
 
@@ -333,17 +333,17 @@ var deserializeOrnaments = function(sceneIndex, serializedOrnaments) {
 }
 
 var saveOrnaments = function(sceneIndex) {
-  var serializedOrnaments = serializeOrnaments(sceneIndex);
-  localStorage['ornaments'] = serializeOrnaments(sceneIndex);
+//   var serializedOrnaments = serializeOrnaments(sceneIndex);
+//   localStorage['ornaments'] = serializeOrnaments(sceneIndex);
 }
 
 var loadOrnaments = function(sceneIndex) {
-  if (localStorage['ornaments']) {
-    while(sceneIndex.ornamentContainer.children.length) {
-      removeOrnament(sceneIndex.ornamentContainer.children[0]);
-    }
-    deserializeOrnaments(sceneIndex, localStorage['ornaments']);
-  }
+//   if (localStorage['ornaments']) {
+//     while(sceneIndex.ornamentContainer.children.length) {
+//       removeOrnament(sceneIndex.ornamentContainer.children[0]);
+//     }
+//     deserializeOrnaments(sceneIndex, localStorage['ornaments']);
+//   }
 };
 
 var g_ornamentDragging = null;
