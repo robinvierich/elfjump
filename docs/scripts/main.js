@@ -50,6 +50,7 @@ var eventQueue = [];
 var g_currOrnamentDatum = null;
 var g_elfJumpTweens = [];
 var g_score = 0;
+var g_startTime = 0; // set in startGame
 
 var EMPTY_LIST = [];
 
@@ -534,6 +535,18 @@ var updateScoreText = function(sceneIndex) {
   scoreText.text = g_score.toString();
 };
 
+var checkForWin = function () {
+  if (g_currOrnamentDatum === finalOrnament) {
+    var duration = Date.now() - g_startTime;
+
+    alert('You win! Your score was ' + g_score + ' and your time was ' + Math.round(duration / 10) / 100 + ' seconds!');
+
+    PIXI.ticker.stop();
+
+    window.location.reload();
+  }
+}
+
 var update = function (dt, sceneIndex) {
    processInput(dt, sceneIndex);
    followElf(dt, sceneIndex);
@@ -544,6 +557,8 @@ var update = function (dt, sceneIndex) {
 
   collectCandyCanes(sceneIndex);
   updateScoreText(sceneIndex);
+
+  checkForWin(sceneIndex);
 };
 
 var run = function(renderer, sceneIndex) {
@@ -605,6 +620,8 @@ var setupScene = function(sceneIndex) {
 var startGame = function(renderer, sceneIndex) {
   setupScene(sceneIndex);
   PIXI.ticker.shared.add(run.bind(null, renderer, sceneIndex));
+
+  g_startTime = Date.now();
 };
 
 
