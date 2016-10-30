@@ -62,12 +62,33 @@ var ORNAMENT_DATA = [
       },
       "type":1,
       "assetPath":"images/ornament1.jpg"
-   }
+   },
+
+    {
+      "position":{
+        "x": 1000,
+        "y": 441
+      },
+      "type":4,
+      "assetPath":"images/ornament4.jpg"
+    },
+
+    {
+      "position":{
+        "x": 900,
+        "y": 200
+      },
+      "type":2,
+      "assetPath":"images/ornament2.jpg"
+    }
+
 ]
 
 var startingOrnaments = [
     ORNAMENT_DATA[0]
 ];
+
+var finalOrnament = ORNAMENT_DATA[ORNAMENT_DATA.length - 1];
 
 var edges = [
     [ORNAMENT_DATA[0], ORNAMENT_DATA[1]],
@@ -78,4 +99,6 @@ var edges = [
     [ORNAMENT_DATA[4], ORNAMENT_DATA[5]],
     [ORNAMENT_DATA[5], ORNAMENT_DATA[6]],
     [ORNAMENT_DATA[6], ORNAMENT_DATA[7]],
+    [ORNAMENT_DATA[7], ORNAMENT_DATA[8]],
+    [ORNAMENT_DATA[8], ORNAMENT_DATA[9]],
 ];
