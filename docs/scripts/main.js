@@ -7,16 +7,19 @@ var getTickerDt = function(ticker) {
 var ASSET_PATHS = {
     BG: 'images/bg.jpg',
     ELF: 'images/elfboy.jpg',
-    ORNAMENT1: 'images/ornament1.jpg',
-    ORNAMENT2: 'images/ornament2.jpg',
-    ORNAMENT3: 'images/ornament3.jpg',
-    ORNAMENT4: 'images/ornament4.jpg'
-}
+    CANDY_CANE: 'images/candycane.gif',
+    ORNAMENTS: {
+      1: 'images/ornament1.jpg',
+      2: 'images/ornament2.jpg',
+      3: 'images/ornament3.jpg',
+      4: 'images/ornament4.jpg'
+    }
+};
 
 var ORNAMENT_DATA = [
-  { position: { x: 600, y: 1650 }, assetPath: ASSET_PATHS.ORNAMENT1, type: 1 },
-  { position: { x: 800, y: 1600 }, assetPath: ASSET_PATHS.ORNAMENT2, type: 2 },
-  { position: { x: 700, y: 1500 }, assetPath: ASSET_PATHS.ORNAMENT3, type: 3 }
+  { position: { x: 600, y: 1650 }, assetPath: ASSET_PATHS.ORNAMENTS[1], type: 1 },
+  { position: { x: 900, y: 1600 }, assetPath: ASSET_PATHS.ORNAMENTS[2], type: 2 },
+  { position: { x: 700, y: 1400 }, assetPath: ASSET_PATHS.ORNAMENTS[3], type: 3 },
 ];
 
 var startingOrnaments = [
@@ -25,8 +28,12 @@ var startingOrnaments = [
 
 var edges = [
     [ORNAMENT_DATA[0], ORNAMENT_DATA[1]],
-    [ORNAMENT_DATA[1], ORNAMENT_DATA[2]]
+    [ORNAMENT_DATA[1], ORNAMENT_DATA[2]],
 ];
+
+var CANDY_CANE_DATA = [
+  { position: { x: 800, y: 1500 }, assetPath: ASSET_PATHS.CANDY_CANE},
+]
 
 var HEIGHT = 1080;
 var WIDTH = 1920;
@@ -35,9 +42,14 @@ var FPS = 60;
 
 var ELF_SPEED = 10000; // units/sec
 
+
+var g_ornamentSpriteToData = new Map();
+var g_ornamentDataToSprite = new Map();
+
 var eventQueue = [];
-var g_currOrnament = null;
+var g_currOrnamentDatum = null;
 var g_elfJumpTweens = [];
+var g_score = 0;
 
 var EMPTY_LIST = [];
 
@@ -202,19 +214,22 @@ var updateTween = function (dt, tween) {
   }
 };
 
-var jumpToOrnament = function (elf, ornament) {
+var jumpToOrnament = function (elf, ornamentDatum) {
   var duration = 0.5;
 
-  var bezierEasing = createJumpEasingFn(elf.x, elf.y, ornament.position.x, ornament.position.y, duration);
+  var ornamentSprite = g_ornamentDataToSprite.get(ornamentDatum);
 
   var startPoint = new PIXI.Point(elf.x, elf.y);
+  var endPoint = new PIXI.Point(ornamentSprite.x, ornamentSprite.y);
 
-  var xTween = createTween(elf.position, startPoint, ornament.position, duration, bezierEasing, function (tween) {
+  var bezierEasing = createJumpEasingFn(startPoint.x, startPoint.y, endPoint.x, endPoint.y, duration);
+
+  var jumpTween = createTween(elf.position, startPoint, endPoint, duration, bezierEasing, function (tween) {
     var tweenIdx = g_elfJumpTweens.indexOf(tween);
     g_elfJumpTweens.splice(tweenIdx, 1);
-    g_currOrnament = ornament;
+    g_currOrnamentDatum = ornamentDatum;
   });
-  g_elfJumpTweens.push(xTween);
+  g_elfJumpTweens.push(jumpTween);
 };
 
 
@@ -230,7 +245,7 @@ var processKeyDown = function(dt, event, sceneIndex) {
   var elf = sceneIndex.elf;
 
   // TODO: Precalculate all of this stuff (keep the handler cheap + won't scale with graph size)
-  var availableOrnaments = isJumping() ? EMPTY_LIST : getAvailableOrnaments(g_currOrnament);
+  var availableOrnaments = isJumping() ? EMPTY_LIST : getAvailableOrnaments(g_currOrnamentDatum);
 
   var keyToOrnamentMap = {};
   for (var i = 0; i < availableOrnaments.length; i++) {
@@ -271,12 +286,157 @@ var processKeyDown = function(dt, event, sceneIndex) {
   }
 }
 
+var createOrnament = function(ornamentContainer, ornamentDatum) {
+  var ornament = PIXI.Sprite.fromFrame(ornamentDatum.assetPath);
+  ornament.position.set(ornamentDatum.position.x, ornamentDatum.position.y);
+  ornament.anchor.set(0.5);
+  ornament.scale.set(0.5);
+  ornamentContainer.addChild(ornament);
+  g_ornamentSpriteToData.set(ornament, ornamentDatum);  
+  g_ornamentDataToSprite.set(ornamentDatum, ornament);  
+};
+
+var removeOrnament = function(ornamentSprite) {
+  var ornamentDatum = g_ornamentSpriteToData.get(ornamentSprite);
+  g_ornamentSpriteToData.delete(ornamentSprite);
+  g_ornamentDataToSprite.delete(ornamentDatum);
+  ornamentSprite.parent.removeChild(ornamentSprite);
+};
+
+var serializeOrnament = function(ornamentSprite) {
+  var ornamentDatum = g_ornamentSpriteToData.get(ornamentSprite);
+  return {
+    position: {
+      x: ornamentSprite.x,
+      y: ornamentSprite.y
+    },
+    type: ornamentDatum.type,
+    assetPath: ornamentDatum.assetPath
+  };
+};
+
+var serializeOrnaments = function(sceneIndex) {
+  var ornaments = sceneIndex.ornamentContainer.children;
+  var serializedOrnaments = [];
+
+  ornaments.forEach(function(ornament) {
+    serializedOrnaments.push(serializeOrnament(ornament));
+  });
+
+  return JSON.stringify(serializedOrnaments);
+};
+
+var deserializeOrnaments = function(sceneIndex, serializedOrnaments) {
+  JSON.parse(serializedOrnaments).forEach(function(ornamentDatum) {
+    createOrnament(sceneIndex.ornamentContainer, ornamentDatum)
+  });
+}
+
+var saveOrnaments = function(sceneIndex) {
+  var serializedOrnaments = serializeOrnaments(sceneIndex);
+  localStorage['ornaments'] = serializeOrnaments(sceneIndex);
+}
+
+var loadOrnaments = function(sceneIndex) {
+  if (localStorage['ornaments']) {
+    while(sceneIndex.ornamentContainer.children.length) {
+      removeOrnament(sceneIndex.ornamentContainer.children[0]);
+    }
+    deserializeOrnaments(sceneIndex, localStorage['ornaments']);
+  }
+};
+
+var g_ornamentDragging = null;
+
+var getWorldCoordsFromMouseEvent = function(event, worldContainer) {
+
+  return event.getLocalPosition(worldContainer);
+}
+
+var mouseHitSprite = function(sprite, mouseEvent, worldContainer) {
+  var spriteScreenBounds = sprite.getBounds();
+  var spriteWorldBounds = new PIXI.Rectangle(
+    spriteScreenBounds.x - worldContainer.x, 
+    spriteScreenBounds.y - worldContainer.y,
+    spriteScreenBounds.width, 
+    spriteScreenBounds.height
+  );
+
+  var worldCoords = getWorldCoordsFromMouseEvent(mouseEvent, sceneIndex.worldContainer);
+
+  return spriteWorldBounds.contains(worldCoords.x, worldCoords.y);
+};
+
+var processMouseDown = function(event, sceneIndex) {
+  var worldCoords = getWorldCoordsFromMouseEvent(event, sceneIndex.worldContainer);  
+
+  if (event.originalEvent.ctrlKey) {
+    var strType = window.prompt("Enter type (1, 2, 3, or 4)");
+    var type = parseInt(strType.trim(), 10);
+    if (type < 1 || type > 4) {
+      alert('Invalid type! Please enter number from 1 - 4');
+    }
+    createOrnament(sceneIndex.ornamentContainer, {
+      position: {
+        x: worldCoords.x,
+        y: worldCoords.y
+      },
+      type: type,
+      assetPath: ASSET_PATHS.ORNAMENTS[type]
+    });
+  }
+
+  for (var i = 0; i < sceneIndex.ornamentContainer.children.length; i++) {
+    var ornament = sceneIndex.ornamentContainer.children[i];
+    
+    if (mouseHitSprite(ornament, event, sceneIndex.worldContainer)) {
+      g_ornamentDragging = ornament;
+      break;
+    }
+  }
+
+  if (event.originalEvent.shiftKey && g_ornamentDragging) {
+    removeOrnament(g_ornamentDragging);
+    g_ornamentDragging = null;
+  }
+};
+
+var processMouseMove = function(event, sceneIndex) {
+  if (event.originalEvent.buttons !== 1) { return; } // left mouse button not pressed
+  if (!g_ornamentDragging) { return; } // no ornament is being dragged
+
+  var worldCoords = getWorldCoordsFromMouseEvent(event, sceneIndex.worldContainer);
+
+  g_ornamentDragging.position.set(worldCoords.x, worldCoords.y);
+
+};
+
+var processMouseUp = function(event, sceneIndex) {
+  if (event.originalEvent.buttons & 1) { return; } // left button in still down
+
+  saveOrnaments(sceneIndex);
+  g_ornamentDragging = null;
+};
+
 var processInput = function(dt, sceneIndex) {
   while (eventQueue.length) {
     var eventData = eventQueue.shift();
     switch (eventData.type) {
     case 'keydown':
       processKeyDown(dt, eventData.event, sceneIndex);
+      break;
+
+    case 'mousedown':
+      processMouseDown(eventData.event, sceneIndex);
+      break;
+
+    case 'mousemove':
+      processMouseMove(eventData.event, sceneIndex);
+      break;
+
+    case 'mouseup':
+      processMouseUp(eventData.event, sceneIndex);
+      break;
 
       // check for ornament type
       // see if possible to jump to ornament
@@ -331,6 +491,49 @@ var followElf = function(dt, sceneIndex) {
   }
 };
 
+var rectHitTest = function(rect1, rect2) {
+  return (
+    ((rect1.x + rect1.width >= rect2.x) && (rect1.x <= rect2.x + rect2.width)) &&
+    ((rect1.y + rect1.height >= rect2.y) && (rect1.y <= rect2.y + rect2.height))
+  );
+};
+
+var increaseScore = function(amount) {
+  g_score += amount;
+};
+
+var collectCandyCanes = function(sceneIndex) {
+  var elf = sceneIndex.elf;
+  var elfBounds = elf.getBounds();
+
+  var candyCaneContainer = sceneIndex.candyCaneContainer;
+
+  for (var i = 0; i < candyCaneContainer.children.length; i++) {
+    var candyCane = candyCaneContainer.children[i];
+    var candyCaneBounds = candyCane.getBounds();
+
+    if (rectHitTest(candyCaneBounds, elfBounds)) {
+      candyCane.parent.removeChild(candyCane);
+      increaseScore(1);
+    }
+  }
+};
+
+var updateScoreText = function(sceneIndex) {
+  var scoreContainer = sceneIndex.scoreContainer;
+  var worldContainer = sceneIndex.worldContainer;
+
+  scoreContainer.y = -worldContainer.y;
+
+  var scoreText = sceneIndex.scoreText;
+  var scoreSymbol = sceneIndex.scoreSymbol;
+
+  scoreText.x = scoreSymbol.width;
+  scoreText.y = scoreSymbol.height / 2;
+
+  scoreText.text = g_score.toString();
+};
+
 var update = function (dt, sceneIndex) {
    processInput(dt, sceneIndex);
    followElf(dt, sceneIndex);
@@ -338,6 +541,9 @@ var update = function (dt, sceneIndex) {
    for (var i = 0; i < g_elfJumpTweens.length; i++) {
      updateTween(dt, g_elfJumpTweens[i]);
    }
+
+  collectCandyCanes(sceneIndex);
+  updateScoreText(sceneIndex);
 };
 
 var run = function(renderer, sceneIndex) {
@@ -349,18 +555,27 @@ var setupElf = function(elf, bg) {
   elf.scale.set(0.25);
   elf.anchor.set(0.5, 1); // anchor at feet
   elf.x = WIDTH / 2;
-  elf.y = bg.height;
+  elf.y = bg.height - 1;
 };
 
 var setupBg = function(bg) {
   bg.scale.set(5);
 }
 
+var setupScore = function(scoreContainer, scoreSymbol, scoreText) {
+  scoreContainer.position.set(0,0);
+
+  scoreSymbol.x = 0;
+  scoreSymbol.scale.set(0.10);
+
+  scoreText.x = scoreSymbol.x + 10;
+  scoreText.anchor.set(0, 0.5);
+};
+
 var setupOrnaments = function(ornamentContainer) {
-  ornamentContainer.children.forEach(function(ornament) {
-      ornament.anchor.set(0.5);
-      ornament.scale.set(0.5);
-  });
+//   ornamentContainer.children.forEach(function(ornament) {
+      
+//   });
 };
 
 var setupCamera = function(worldContainer) {
@@ -368,11 +583,23 @@ var setupCamera = function(worldContainer) {
   worldContainer.y = -worldContainer.height + HEIGHT;
 }
 
+var setupCandyCanes = function(candyCaneContainer) {
+  candyCaneContainer.children.forEach(function(candyCane) {
+    candyCane.anchor.set(0.5);
+    candyCane.scale.set(0.25);
+    candyCane.rotation = Math.PI * -0.3;
+  });
+};
+
 var setupScene = function(sceneIndex) {
   setupBg(sceneIndex.bg);
+  setupScore(sceneIndex.scoreContainer, sceneIndex.scoreSymbol, sceneIndex.scoreText);
   setupElf(sceneIndex.elf, sceneIndex.bg);
   setupOrnaments(sceneIndex.ornamentContainer);
+  setupCandyCanes(sceneIndex.candyCaneContainer);
   setupCamera(sceneIndex.worldContainer);
+
+  loadOrnaments(sceneIndex)
 };
 
 var startGame = function(renderer, sceneIndex) {
@@ -393,14 +620,28 @@ var buildSceneGraph = function() {
       var bg = PIXI.Sprite.fromFrame(ASSET_PATHS.BG);
       worldContainer.addChild(bg);
 
+      var scoreContainer = new PIXI.Container();
+      worldContainer.addChild(scoreContainer);
+
+        var scoreSymbol = PIXI.Sprite.fromFrame(ASSET_PATHS.CANDY_CANE);
+        var scoreText = new PIXI.Text('', {fontFamily: 'Arial', fontSize: 32, fill: 0x000000, align: 'left' });
+        scoreContainer.addChild(scoreSymbol);
+        scoreContainer.addChild(scoreText);
+
       var ornamentContainer =  new PIXI.Container();
       worldContainer.addChild(ornamentContainer);
-
         // ornaments
         ORNAMENT_DATA.forEach(function(ornamentDatum) {
-          var ornament = PIXI.Sprite.fromFrame(ornamentDatum.assetPath);
-          ornament.position.set(ornamentDatum.position.x, ornamentDatum.position.y);
-          ornamentContainer.addChild(ornament);
+          createOrnament(ornamentContainer, ornamentDatum);
+        });
+      
+      var candyCaneContainer = new PIXI.Container();
+      worldContainer.addChild(candyCaneContainer);
+        
+        CANDY_CANE_DATA.forEach(function(candyCaneDatum) {
+          var candyCane =  PIXI.Sprite.fromFrame(candyCaneDatum.assetPath);
+          candyCane.position.set(candyCaneDatum.position.x, candyCaneDatum.position.y);
+          candyCaneContainer.addChild(candyCane);
         });
 
       var elf = PIXI.Sprite.fromFrame(ASSET_PATHS.ELF);
@@ -410,12 +651,16 @@ var buildSceneGraph = function() {
     root: root,
       worldContainer: worldContainer,
         bg: bg,
+        scoreContainer: scoreContainer,
+        scoreSymbol: scoreSymbol,
+        scoreText: scoreText,
         ornamentContainer: ornamentContainer,
-        elf: elf
+        candyCaneContainer: candyCaneContainer,
+        elf: elf,
   };
 };
 
-var addKeyHandlers = function() {
+var addKeyHandlers = function(renderer, worldContainer) {
   window.addEventListener('keydown', function(e) {
     // push keydown event to event queue
     eventQueue.push({type: 'keydown', event: e});
@@ -425,15 +670,42 @@ var addKeyHandlers = function() {
     // push keyup event to event queue
     eventQueue.push({type: 'keyup', event: e});
   });
+
+  var interactionManager = new PIXI.interaction.InteractionManager(renderer);
+
+  interactionManager.on('mousedown', function(e) {
+    // push keyup event to event queue
+
+    eventQueue.push({type: 'mousedown', event: interactionManager.mouse});
+  });
+
+  interactionManager.on('mousemove', function(e) {
+    // push keyup event to event queue
+    eventQueue.push({type: 'mousemove', event: interactionManager.mouse});
+  });
+
+  interactionManager.on('mouseup', function(e) {
+    // push keyup event to event queue
+    eventQueue.push({type: 'mouseup', event: interactionManager.mouse});
+  });
 };
+
+var loadAssetObject = function(loader, assetObj) {
+  for (let reference in assetObj) {
+    var assetDesc = assetObj[reference];
+    if (typeof assetDesc === 'object') {
+      loadAssetObject(loader, assetDesc);
+    } else {
+      loader.add(assetObj[reference]);  
+    }
+  }
+}
 
 var load = function() {
   return new Promise(function(resolve, reject){
     var loader = new PIXI.loaders.Loader();
 
-    for (let reference in ASSET_PATHS) {
-      loader.add(ASSET_PATHS[reference]);
-    }
+    loadAssetObject(loader, ASSET_PATHS);
 
     loader.once('complete', resolve);
     loader.once('error', reject);
@@ -456,7 +728,7 @@ var init = function() {
     // build scene
     var sceneIndex = buildSceneGraph();
     // add key handlers
-    addKeyHandlers(canvas);
+    addKeyHandlers(renderer, sceneIndex.worldContainer);
 
     // DEBUGGING
     window.sceneIndex = sceneIndex;
