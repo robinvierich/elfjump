@@ -34,6 +34,17 @@ var getOrnamentAssetPath = function(ornamentDatum) {
   return ASSET_PATHS.ORNAMENTS[ornamentDatum.type];
 };
 
+var findFinalOrnament = function(ornamentData) {
+  for (var i = 0; i < ornamentData.length; i++) {
+    var ornamentDatum = ornamentData[i];
+    if (ornamentDatum.final) {
+      return ornamentDatum;
+    }
+  }
+
+  return null;
+};
+
 //var ORNAMENT_DATA = [
 //  { id: 0, position: { x: 600, y: 1650 }, assetPath: ASSET_PATHS.ORNAMENTS[1], type: 1 },
 //  { id: 1, position: { x: 900, y: 1600 }, assetPath: ASSET_PATHS.ORNAMENTS[2], type: 2 },
@@ -63,6 +74,9 @@ var ELF_JUMP_DURATION = 0.5;
 
 var TOP_OF_TREE_OFFSET = 800;
 
+var CAMERA_SPEED = 3000;
+var CAMERA_MOVEMENT_CUTOFF = 10; // how many px away from center until we skip movement?
+
 var g_ornamentSpriteToData = new Map();
 var g_ornamentDataToSprite = new Map();
 
@@ -73,6 +87,8 @@ var g_score = 0;
 var g_startTime = 0; // set in startGame
 
 var EMPTY_LIST = [];
+
+var g_finalOrnament = findFinalOrnament(ORNAMENT_DATA);
 
 var canJumpToOrnament = function(currOrnament, nextOrnament) {
   for (var i = 0; i < g_edges.length; i++) {
@@ -155,6 +171,8 @@ var getOrnamentWorldPosition = function(ornamentSprite) {
   );
 };
 
+var BEZIER_JUMP_HEIGHT = 300;
+
 var createJumpLut = function(startx, starty, endx, endy, duration) {
   var t = 0;
   var bezier = new Bezier(
@@ -181,7 +199,6 @@ var createJumpLut = function(startx, starty, endx, endy, duration) {
   return lut;
 };
 
-var BEZIER_JUMP_HEIGHT = 150;
 // TODO: precalc all of these on startup and create LUTs for each edge direction
 var createJumpEasingFn = function (startX, startY, endX, endY, duration) {
 //   var bezier = new Bezier(
@@ -270,6 +287,7 @@ var jumpToPosition = function(elf, position, onComplete) {
 var jumpToOrnament = function (elf, ornamentDatum) {
   var ornamentSprite = g_ornamentDataToSprite.get(ornamentDatum);
   var ornamentWorldPosition = getOrnamentWorldPosition(ornamentSprite);
+  ornamentWorldPosition.y += (1/2) * elf.height
 
   // SUPER HAXX - need to actually get full parent transform
 
@@ -352,11 +370,25 @@ var createOrnament = function(ornamentContainer, ornamentDatum) {
   }
 };
 
-var removeOrnament = function(ornamentSprite) {
-  var ornamentDatum = g_ornamentSpriteToData.get(ornamentSprite);
-  g_ornamentSpriteToData.delete(ornamentSprite);
+var removeOrnament = function(ornamentSpriteToRemove, sceneIndex) {
+  var ornamentDatum = g_ornamentSpriteToData.get(ornamentSpriteToRemove);
+
+  var ornaments = sceneIndex.ornamentContainer.children;
+
+  for (var i = 0; i < ornaments.length; i++) {
+    var ornament = ornaments[i];
+    if (ornament === ornamentSpriteToRemove) { continue; }
+
+    var edge = findEdgeBetweenOrnaments(ornament, ornamentSpriteToRemove);
+    if (edge) { removeEdge(ornament, ornamentSpriteToRemove); }
+  }
+
+  g_ornamentSpriteToData.delete(ornamentSpriteToRemove);
   g_ornamentDataToSprite.delete(ornamentDatum);
-  ornamentSprite.parent.removeChild(ornamentSprite);
+  ornamentSpriteToRemove.parent.removeChild(ornamentSpriteToRemove);
+
+  var idx = ORNAMENT_DATA.indexOf(ornamentDatum);
+  ORNAMENT_DATA.splice(idx, 1);
 };
 
 var serializeOrnament = function(ornamentSprite) {
@@ -367,6 +399,7 @@ var serializeOrnament = function(ornamentSprite) {
       y: ornamentSprite.y
     },
     type: ornamentDatum.type,
+    final: ornamentDatum.final || false,
   };
 };
 
@@ -453,14 +486,19 @@ var processMouseDown = function(event, sceneIndex) {
     if (type < 1 || type > 6) {
       alert('Invalid type! Please enter number from 1 - 6');
     }
-    createOrnament(sceneIndex.ornamentContainer, {
+
+    var ornamentDatum = {
       position: {
         x: worldCoords.x,
         y: worldCoords.y
       },
       type: type,
       assetPath: ASSET_PATHS.ORNAMENTS[type]
-    });
+    };
+
+    ORNAMENT_DATA.push(ornamentDatum);
+
+    createOrnament(sceneIndex.ornamentContainer, ornamentDatum);
   }
 
   g_ornamentDragging = findOrnamentAtWorldPosition(worldCoords, sceneIndex.worldContainer);
@@ -475,7 +513,7 @@ var processMouseDown = function(event, sceneIndex) {
   }
 
   if (event.originalEvent.shiftKey && !event.originalEvent.metaKey) {
-    removeOrnament(g_ornamentDragging);
+    removeOrnament(g_ornamentDragging, sceneIndex);
     g_ornamentDragging = null;
   }
 
@@ -487,8 +525,11 @@ var processMouseMove = function(event, sceneIndex) {
 
   var worldCoords = getWorldCoordsFromMouseEvent(event, sceneIndex.worldContainer);
 
-  g_ornamentDragging.position.set(worldCoords.x, worldCoords.y);
-
+  // HAXX
+  g_ornamentDragging.position.set(
+    worldCoords.x - g_ornamentDragging.parent.x,
+    worldCoords.y - g_ornamentDragging.parent.y
+  );
 };
 
 var findEdgeBetweenOrnaments = function(ornament1Sprite, ornament2Sprite) {
@@ -577,8 +618,7 @@ var processInput = function(dt, sceneIndex) {
   }
 };
 
-var CAMERA_SPEED = 10000;
-var CAMERA_MOVEMENT_CUTOFF = 10; // how many px away from center until we skip movement?
+
 
 var normalizeVector = function(vector) {
   var mag = Math.sqrt(vector.x * vector.x + vector.y * vector.y);
@@ -599,7 +639,7 @@ var followElf = function(dt, sceneIndex) {
 
   var vecFromElfToCenterScreen = new PIXI.Point(
     centerScreenInWorld.x - elfPos.x,
-    centerScreenInWorld.y - elfPos.y
+    centerScreenInWorld.y - (elfPos.y - elf.height / 2)
   );
 
   var scaledVecFromElfToCenterScreen = new PIXI.Point(
@@ -685,7 +725,7 @@ var placeStar = function(sceneIndex, onComplete) {
 var won = false;
 
 var checkForWin = function (sceneIndex) {
-  if (!won && g_currOrnamentDatum === finalOrnament) {
+  if (!won && g_currOrnamentDatum === g_finalOrnament) {
     won = true;
     var duration = Date.now() - g_startTime;
 
@@ -757,9 +797,9 @@ var setupElf = function(elf, worldContainer) {
 
 var setupBg = function(bgMargins, bgWall, bgFloor, worldContainer) {
   bgMargins.width = worldContainer.width;
-  bgMargins.height = worldContainer.height + TOP_OF_TREE_OFFSET;
+  bgMargins.height = worldContainer.height;
 
-  bgWall.height = worldContainer.height + TOP_OF_TREE_OFFSET;
+  bgWall.height = worldContainer.height;
   bgWall.width = worldContainer.width;
   bgWall.y = worldContainer.height;
   bgWall.anchor.set(0, 1);
@@ -771,6 +811,7 @@ var setupBg = function(bgMargins, bgWall, bgFloor, worldContainer) {
 
 var setupTree = function(tree, worldContainer) {
   tree.y += TOP_OF_TREE_OFFSET;
+  tree.scale.set(2);
 };
 
 var setupScore = function(scoreContainer, scoreSymbol, scoreText) {
@@ -805,14 +846,14 @@ var setupOrnaments = function(ornamentContainer) {
 
 var setupStar = function(star) {
   star.anchor.set(0.5, 0);
-  star.x = 1325;
+  star.x = 1325 * 2;
   star.y = TOP_OF_TREE_OFFSET - 360;
   star.visible = false;
 };
 
 var setupScene = function(sceneIndex) {
-  setupBg(sceneIndex.bgMargins, sceneIndex.bgWall, sceneIndex.bgFloor, sceneIndex.worldContainer);
   setupTree(sceneIndex.tree, sceneIndex.worldContainer);
+  setupBg(sceneIndex.bgMargins, sceneIndex.bgWall, sceneIndex.bgFloor, sceneIndex.worldContainer);
   setupScore(sceneIndex.scoreContainer, sceneIndex.scoreSymbol, sceneIndex.scoreText);
   setupElf(sceneIndex.elf, sceneIndex.worldContainer);
   setupOrnaments(sceneIndex.ornamentContainer);
