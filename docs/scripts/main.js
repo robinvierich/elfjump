@@ -15,7 +15,8 @@ var ASSET_PATHS = {
     ELF: {
       STAND: 'images/elf-down.png',
       JUMP: 'images/elf-up.png',
-      FALL: 'images/elf-down.png'
+      FALL: 'images/elf-down.png',
+      PLACE_STAR: 'images/elf-place-star.png'
     },
     CANDY_CANE: 'images/candycane.png',
     ORNAMENTS: {
@@ -25,7 +26,8 @@ var ASSET_PATHS = {
       4: 'images/ball4.png',
       5: 'images/ball5.png',
       6: 'images/ball6.png'
-    }
+    },
+    STAR: 'images/final-star.png'
 };
 
 var getOrnamentAssetPath = function(ornamentDatum) {
@@ -59,8 +61,7 @@ var FPS = 60;
 var ELF_SPEED = 10000; // units/sec
 var ELF_JUMP_DURATION = 0.5;
 
-var TOP_OF_TREE_OFFSET = 200;
-
+var TOP_OF_TREE_OFFSET = 800;
 
 var g_ornamentSpriteToData = new Map();
 var g_ornamentDataToSprite = new Map();
@@ -147,13 +148,12 @@ var lutEasing = function (lut, t) {
   return lut[idx];
 };
 
-
-// var GRAVITY = 9.8;
-
-// var quad = function(t, start, end) {
-//   return (GRAVITY / 2) * (t * t) + (start - end + (GRAVITY / 2)) * t + start;
-// };
-
+var getOrnamentWorldPosition = function(ornamentSprite) {
+  return new PIXI.Point(
+    ornamentSprite.position.x + ornamentSprite.parent.x,
+    ornamentSprite.position.y + ornamentSprite.parent.y
+  );
+};
 
 var createJumpLut = function(startx, starty, endx, endy, duration) {
   var t = 0;
@@ -251,28 +251,34 @@ var updateTween = function (dt, tween) {
   }
 };
 
-var jumpToOrnament = function (elf, ornamentDatum, worldContainer) {
-  var ornamentSprite = g_ornamentDataToSprite.get(ornamentDatum);
-
+var jumpToPosition = function(elf, position, onComplete) {
   var startPoint = new PIXI.Point(elf.x, elf.y);
   var endPoint = new PIXI.Point(
-    ornamentSprite.x,// + worldContainer.x,
-    ornamentSprite.y// + worldContainer.y
+    position.x,// + worldContainer.x,
+    position.y// + worldContainer.y
   );
 
   var bezierEasing = createJumpEasingFn(startPoint.x, startPoint.y, endPoint.x, endPoint.y, ELF_JUMP_DURATION);
 
   var jumpTexture = PIXI.utils.TextureCache[ASSET_PATHS.ELF.JUMP];
+  elf.texture = jumpTexture;
 
-  elf.setTexture(jumpTexture);
+  var jumpTween = createTween(elf.position, startPoint, endPoint, ELF_JUMP_DURATION, bezierEasing, onComplete);
+  startTween(jumpTween);
+};
 
-  var jumpTween = createTween(elf.position, startPoint, endPoint, ELF_JUMP_DURATION, bezierEasing, function (tween) {
+var jumpToOrnament = function (elf, ornamentDatum) {
+  var ornamentSprite = g_ornamentDataToSprite.get(ornamentDatum);
+  var ornamentWorldPosition = getOrnamentWorldPosition(ornamentSprite);
+
+  // SUPER HAXX - need to actually get full parent transform
+
+
+  jumpToPosition(elf, ornamentWorldPosition, function(tween) {
     g_currOrnamentDatum = ornamentDatum;
     var standTexture = PIXI.utils.TextureCache[ASSET_PATHS.ELF.STAND];
-    elf.setTexture(standTexture);
+    elf.texture = standTexture;
   });
-
-  startTween(jumpTween);
 };
 
 
@@ -365,7 +371,7 @@ var serializeOrnament = function(ornamentSprite) {
 };
 
 var getEdgeStr = function(ornamentIdx1, ornamentIdx2) {
-  return "ORNAMENT_DATA[" + ornamentIdx1 + "], ORNAMENT_DATA[" + ornamentIdx2 + "]";
+  return "[ORNAMENT_DATA[" + ornamentIdx1 + "], ORNAMENT_DATA[" + ornamentIdx2 + "]],";
 }
 
 var serializeEdges = function(edges) {
@@ -571,7 +577,7 @@ var processInput = function(dt, sceneIndex) {
   }
 };
 
-var CAMERA_SPEED = 500;
+var CAMERA_SPEED = 10000;
 var CAMERA_MOVEMENT_CUTOFF = 10; // how many px away from center until we skip movement?
 
 var normalizeVector = function(vector) {
@@ -658,15 +664,37 @@ var updateScoreText = function(sceneIndex) {
   scoreText.text = g_score.toString();
 };
 
-var checkForWin = function () {
-  if (g_currOrnamentDatum === finalOrnament) {
+var placeStar = function(sceneIndex, onComplete) {
+  var elf = sceneIndex.elf;
+
+  var placeStarTexture = PIXI.utils.TextureCache[ASSET_PATHS.ELF.PLACE_STAR];
+
+  jumpToPosition(elf, new PIXI.Point(sceneIndex.star.x, sceneIndex.star.y), function() {
+    elf.texture = placeStarTexture;
+    var star = sceneIndex.star;
+    star.visible = true;
+
+    var timerTween = createTimerTween(0.5, function() {
+      onComplete();
+    });
+
+    startTween(timerTween);
+  });
+};
+
+var won = false;
+
+var checkForWin = function (sceneIndex) {
+  if (!won && g_currOrnamentDatum === finalOrnament) {
+    won = true;
     var duration = Date.now() - g_startTime;
 
-    alert('You win! Your score was ' + g_score + ' and your time was ' + Math.round(duration / 10) / 100 + ' seconds!');
+    placeStar(sceneIndex, function() {
+      alert('You win! Your score was ' + g_score + ' and your time was ' + Math.round(duration / 10) / 100 + ' seconds!');
+      PIXI.ticker.shared.stop();
 
-    PIXI.ticker.shared.stop();
-
-    window.location.reload();
+      window.location.reload();
+    });
   }
 }
 
@@ -686,8 +714,11 @@ var drawEdges = function(sceneIndex) {
     var ornament1Sprite = g_ornamentDataToSprite.get(edge[0]);
     var ornament2Sprite = g_ornamentDataToSprite.get(edge[1]);
 
-    graphics.moveTo(ornament1Sprite.x, ornament1Sprite.y);
-    graphics.lineTo(ornament2Sprite.x, ornament2Sprite.y);
+    var worldPos1 = getOrnamentWorldPosition(ornament1Sprite);
+    var worldPos2 = getOrnamentWorldPosition(ornament2Sprite);
+
+    graphics.moveTo(worldPos1.x, worldPos1.y);
+    graphics.lineTo(worldPos2.x, worldPos2.y);
   }
 
   graphics.endFill();
@@ -701,7 +732,6 @@ var update = function (dt, sceneIndex) {
     sceneIndex.debugGraphics.clear();
     drawEdges(sceneIndex);
   }
-
 
   for (var i = 0; i < g_tweens.length; i++) {
     updateTween(dt, g_tweens[i]);
@@ -768,13 +798,27 @@ var setupCandyCanes = function(candyCaneContainer) {
   candyCaneContainer.y += TOP_OF_TREE_OFFSET;
 };
 
+var setupOrnaments = function(ornamentContainer) {
+  ornamentContainer.y += TOP_OF_TREE_OFFSET;
+  ornamentContainer.children.forEach(function(ornament) {});
+}
+
+var setupStar = function(star) {
+  star.anchor.set(0.5, 0);
+  star.x = 1325;
+  star.y = TOP_OF_TREE_OFFSET - 360;
+  star.visible = false;
+};
+
 var setupScene = function(sceneIndex) {
   setupBg(sceneIndex.bgMargins, sceneIndex.bgWall, sceneIndex.bgFloor, sceneIndex.worldContainer);
   setupTree(sceneIndex.tree, sceneIndex.worldContainer);
   setupScore(sceneIndex.scoreContainer, sceneIndex.scoreSymbol, sceneIndex.scoreText);
   setupElf(sceneIndex.elf, sceneIndex.worldContainer);
+  setupOrnaments(sceneIndex.ornamentContainer);
   setupCandyCanes(sceneIndex.candyCaneContainer);
   setupCamera(sceneIndex.worldContainer);
+  setupStar(sceneIndex.star);
 };
 
 var startGame = function(renderer, sceneIndex) {
@@ -840,6 +884,9 @@ var buildSceneGraph = function() {
         var elf = PIXI.Sprite.fromFrame(ASSET_PATHS.ELF.STAND);
         worldContainer.addChild(elf);
 
+        var star = PIXI.Sprite.fromFrame(ASSET_PATHS.STAR);
+        worldContainer.addChild(star);
+
         if (DEBUG) {
           var debugGraphics = new PIXI.Graphics();
           worldContainer.addChild(debugGraphics);
@@ -859,6 +906,7 @@ var buildSceneGraph = function() {
         ornamentContainer: ornamentContainer,
         candyCaneContainer: candyCaneContainer,
         elf: elf,
+        star: star,
         debugGraphics: debugGraphics,
   };
 };
