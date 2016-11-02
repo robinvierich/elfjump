@@ -6,6 +6,7 @@ var getTickerDt = function(ticker) {
 };
 
 var ASSET_PATHS = {
+    TRANSPARENT: 'images/transparent.png',
     BG: {
       WALL: 'images/bg-1px.png',
       FLOOR: 'images/bg-floor-1px.png',
@@ -56,6 +57,8 @@ var WIDTH = 1920;
 var FPS = 60;
 
 var ELF_SPEED = 10000; // units/sec
+
+var TOP_OF_TREE_OFFSET = 200;
 
 
 var g_ornamentSpriteToData = new Map();
@@ -230,13 +233,16 @@ var updateTween = function (dt, tween) {
   }
 };
 
-var jumpToOrnament = function (elf, ornamentDatum) {
+var jumpToOrnament = function (elf, ornamentDatum, worldContainer) {
   var duration = 0.5;
 
   var ornamentSprite = g_ornamentDataToSprite.get(ornamentDatum);
 
   var startPoint = new PIXI.Point(elf.x, elf.y);
-  var endPoint = new PIXI.Point(ornamentSprite.x, ornamentSprite.y);
+  var endPoint = new PIXI.Point(
+    ornamentSprite.x,// + worldContainer.x,
+    ornamentSprite.y// + worldContainer.y
+  );
 
   var bezierEasing = createJumpEasingFn(startPoint.x, startPoint.y, endPoint.x, endPoint.y, duration);
 
@@ -298,21 +304,23 @@ var processKeyDown = function(dt, event, sceneIndex) {
       var ornament = keyToOrnamentMap[event.key];
       if (!ornament) { break; }
 
-      jumpToOrnament(sceneIndex.elf, ornament);
+      jumpToOrnament(sceneIndex.elf, ornament, sceneIndex.worldContainer);
   }
 }
 
 var createOrnament = function(ornamentContainer, ornamentDatum) {
   var ornament = PIXI.Sprite.fromFrame(getOrnamentAssetPath(ornamentDatum));
   ornament.position.set(ornamentDatum.position.x, ornamentDatum.position.y);
-  ornament.anchor.set(0.5);
-  ornament.scale.set(0.5);
+  ornament.anchor.set(0.5, 0);
+  ornament.scale.set(1);
   ornamentContainer.addChild(ornament);
   g_ornamentSpriteToData.set(ornament, ornamentDatum);
   g_ornamentDataToSprite.set(ornamentDatum, ornament);
 
   if (DEBUG) {
-    var ornamentKeyText = new PIXI.Text(ornamentDatum.type.toString(), {fontFamily: 'Arial', fontSize: 72, fill: 0x220000, align: 'left' });
+    var ornamentKeyText = new PIXI.Text(ornamentDatum.type.toString(), {fontFamily: 'Arial', fontSize: 256, fill: 0x220000, align: 'left' });
+    ornamentKeyText.anchor.set(0.5, 0);
+    ornamentKeyText.y = ornament.height / 4;
     ornament.addChild(ornamentKeyText);
   }
 };
@@ -376,20 +384,6 @@ var deserializeOrnaments = function(sceneIndex, serializedOrnaments) {
     createOrnament(sceneIndex.ornamentContainer, ornamentDatum)
   });
 }
-
-var saveOrnaments = function(sceneIndex) {
-//   var serializedOrnaments = serializeOrnaments(sceneIndex);
-//   localStorage['ornaments'] = serializeOrnaments(sceneIndex);
-}
-
-var loadOrnaments = function(sceneIndex) {
-//   if (localStorage['ornaments']) {
-//     while(sceneIndex.ornamentContainer.children.length) {
-//       removeOrnament(sceneIndex.ornamentContainer.children[0]);
-//     }
-//     deserializeOrnaments(sceneIndex, localStorage['ornaments']);
-//   }
-};
 
 var g_ornamentDragging = null;
 
@@ -707,35 +701,38 @@ var run = function(renderer, sceneIndex) {
 };
 
 var setupElf = function(elf, worldContainer) {
-  elf.scale.set(0.25);
+  elf.scale.set(1);
   elf.anchor.set(0.5, 1); // anchor at feet
   elf.x = WIDTH / 2;
   elf.y = worldContainer.height - elf.height - 1;
 };
 
-var setupBg = function(bgWall, bgFloor, worldContainer) {
-  bgWall.height = worldContainer.height;
+var setupBg = function(bgMargins, bgWall, bgFloor, worldContainer) {
+  bgMargins.width = worldContainer.width;
+  bgMargins.height = worldContainer.height + TOP_OF_TREE_OFFSET;
+
+  bgWall.height = worldContainer.height + TOP_OF_TREE_OFFSET;
   bgWall.width = worldContainer.width;
+  bgWall.y = worldContainer.height;
+  bgWall.anchor.set(0, 1);
 
   bgFloor.anchor.set(0, 1);
   bgFloor.y = worldContainer.height;
   bgFloor.width = worldContainer.width;
 }
 
+var setupTree = function(tree, worldContainer) {
+  tree.y += TOP_OF_TREE_OFFSET;
+};
+
 var setupScore = function(scoreContainer, scoreSymbol, scoreText) {
   scoreContainer.position.set(0,0);
 
   scoreSymbol.x = 0;
-  scoreSymbol.scale.set(0.10);
+  scoreSymbol.scale.set(0.25);
 
   scoreText.x = scoreSymbol.x + 10;
   scoreText.anchor.set(0, 0.5);
-};
-
-var setupOrnaments = function(ornamentContainer) {
-//   ornamentContainer.children.forEach(function(ornament) {
-
-//   });
 };
 
 var setupCamera = function(worldContainer) {
@@ -746,20 +743,20 @@ var setupCamera = function(worldContainer) {
 var setupCandyCanes = function(candyCaneContainer) {
   candyCaneContainer.children.forEach(function(candyCane) {
     candyCane.anchor.set(0.5);
-    candyCane.scale.set(0.25);
+    candyCane.scale.set(1);
     candyCane.rotation = Math.PI * -0.3;
   });
+
+  candyCaneContainer.y += TOP_OF_TREE_OFFSET;
 };
 
 var setupScene = function(sceneIndex) {
-  setupBg(sceneIndex.bgWall, sceneIndex.bgFloor, sceneIndex.worldContainer);
+  setupBg(sceneIndex.bgMargins, sceneIndex.bgWall, sceneIndex.bgFloor, sceneIndex.worldContainer);
+  setupTree(sceneIndex.tree, sceneIndex.worldContainer);
   setupScore(sceneIndex.scoreContainer, sceneIndex.scoreSymbol, sceneIndex.scoreText);
   setupElf(sceneIndex.elf, sceneIndex.worldContainer);
-  setupOrnaments(sceneIndex.ornamentContainer);
   setupCandyCanes(sceneIndex.candyCaneContainer);
   setupCamera(sceneIndex.worldContainer);
-
-  loadOrnaments(sceneIndex)
 };
 
 var startGame = function(renderer, sceneIndex) {
@@ -770,7 +767,6 @@ var startGame = function(renderer, sceneIndex) {
 };
 
 
-
 // returns an index of {name: element}
 var buildSceneGraph = function() {
 
@@ -779,61 +775,66 @@ var buildSceneGraph = function() {
     var worldContainer = new PIXI.Container();
     root.addChild(worldContainer);
 
-    var tree = PIXI.Sprite.fromFrame(ASSET_PATHS.TREE);
-    // NOT ADDED YET! JUST NEED WIDTH/HEIGHT FOR BG
+    // var marginContainer = new PIXI.Container();
+    // worldContainer.addChild(marginContainer)
 
-      var bgContainer = new PIXI.Container();
-      worldContainer.addChild(bgContainer);
+      // var bgContainer = new PIXI.Container();
+      // worldContainer.addChild(bgContainer);
 
-        var bgWall = PIXI.extras.TilingSprite.fromFrame(ASSET_PATHS.BG.WALL);
-        bgContainer.addChild(bgWall);
-        // update scale/height
+      var bgMargins = PIXI.Sprite.fromFrame(ASSET_PATHS.TRANSPARENT);
+      worldContainer.addChild(bgMargins);
 
-        var bgFloor = PIXI.Sprite.fromFrame(ASSET_PATHS.BG.FLOOR);
-        bgContainer.addChild(bgFloor);
-        // update scale/height
+      var bgWall = PIXI.extras.TilingSprite.fromFrame(ASSET_PATHS.BG.WALL);
+      worldContainer.addChild(bgWall);
+      // update scale/height
 
+      var bgFloor = PIXI.Sprite.fromFrame(ASSET_PATHS.BG.FLOOR);
+      worldContainer.addChild(bgFloor);
+          // update scale/height
 
-      worldContainer.addChild(tree);
+        var tree = PIXI.Sprite.fromFrame(ASSET_PATHS.TREE);
+        worldContainer.addChild(tree);
 
-      var scoreContainer = new PIXI.Container();
-      worldContainer.addChild(scoreContainer);
+        var scoreContainer = new PIXI.Container();
+        worldContainer.addChild(scoreContainer);
 
-        var scoreSymbol = PIXI.Sprite.fromFrame(ASSET_PATHS.CANDY_CANE);
-        var scoreText = new PIXI.Text('', {fontFamily: 'Arial', fontSize: 32, fill: 0x000000, align: 'left' });
-        scoreContainer.addChild(scoreSymbol);
-        scoreContainer.addChild(scoreText);
+          var scoreSymbol = PIXI.Sprite.fromFrame(ASSET_PATHS.CANDY_CANE);
+          var scoreText = new PIXI.Text('', {fontFamily: 'Arial', fontSize: 72, fill: 0x000000, align: 'left' });
+          scoreContainer.addChild(scoreSymbol);
+          scoreContainer.addChild(scoreText);
 
-      var ornamentContainer =  new PIXI.Container();
-      worldContainer.addChild(ornamentContainer);
-        // ornaments
-        ORNAMENT_DATA.forEach(function(ornamentDatum) {
-          createOrnament(ornamentContainer, ornamentDatum);
-        });
+        var ornamentContainer =  new PIXI.Container();
+        worldContainer.addChild(ornamentContainer);
+          // ornaments
+          ORNAMENT_DATA.forEach(function(ornamentDatum) {
+            createOrnament(ornamentContainer, ornamentDatum);
+          });
 
-      var candyCaneContainer = new PIXI.Container();
-      worldContainer.addChild(candyCaneContainer);
+        var candyCaneContainer = new PIXI.Container();
+        worldContainer.addChild(candyCaneContainer);
 
-        CANDY_CANE_DATA.forEach(function(candyCaneDatum) {
-          var candyCane =  PIXI.Sprite.fromFrame(candyCaneDatum.assetPath);
-          candyCane.position.set(candyCaneDatum.position.x, candyCaneDatum.position.y);
-          candyCaneContainer.addChild(candyCane);
-        });
+          CANDY_CANE_DATA.forEach(function(candyCaneDatum) {
+            var candyCane =  PIXI.Sprite.fromFrame(candyCaneDatum.assetPath);
+            candyCane.position.set(candyCaneDatum.position.x, candyCaneDatum.position.y);
+            candyCaneContainer.addChild(candyCane);
+          });
 
-      var elf = PIXI.Sprite.fromFrame(ASSET_PATHS.ELF.STAND);
-      worldContainer.addChild(elf);
+        var elf = PIXI.Sprite.fromFrame(ASSET_PATHS.ELF.STAND);
+        worldContainer.addChild(elf);
 
-      if (DEBUG) {
-        var debugGraphics = new PIXI.Graphics();
-        worldContainer.addChild(debugGraphics);
-      }
+        if (DEBUG) {
+          var debugGraphics = new PIXI.Graphics();
+          worldContainer.addChild(debugGraphics);
+        }
 
 
   return {
     root: root,
       worldContainer: worldContainer,
+        bgMargins: bgMargins,
         bgWall: bgWall,
         bgFloor: bgFloor,
+        tree: tree,
         scoreContainer: scoreContainer,
         scoreSymbol: scoreSymbol,
         scoreText: scoreText,
