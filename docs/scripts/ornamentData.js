@@ -1,87 +1,102 @@
 var ORNAMENT_DATA = [
-   {
-      "position":{
-         "x":600,
-         "y":1650
-      },
-      "type":1,
-      "assetPath":"images/ornament1.jpg"
-   },
-   {
-      "position":{
-         "x":881.1428571428571,
-         "y":1547.077936510577
-      },
-      "type":2,
-      "assetPath":"images/ornament2.jpg"
-   },
-   {
-      "position":{
-         "x":630.8571428571428,
-         "y":1361.7389534597296
-      },
-      "type":3,
-      "assetPath":"images/ornament3.jpg"
-   },
-   {
-      "position":{
-         "x":1212.5714285714284,
-         "y":1548.2220043071873
-      },
-      "type":2,
-      "assetPath":"images/ornament2.jpg"
-   },
-   {
-      "position":{
-         "x":1361.142857142857,
-         "y":1334.2813263410856
-      },
-      "type":1,
-      "assetPath":"images/ornament1.jpg"
-   },
-   {
-      "position":{
-         "x":986.2857142857142,
-         "y":1142.077936510577
-      },
-      "type":4,
-      "assetPath":"images/ornament4.jpg"
-   },
-   {
-      "position":{
-         "x":736,
-         "y":935.0016653241364
-      },
-      "type":2,
-      "assetPath":"images/ornament2.jpg"
-   },
-   {
-      "position":{
-        "x": 1111.0642786562644,
-        "y": 741.0870819735674
-      },
-      "type":1,
-      "assetPath":"images/ornament1.jpg"
-   },
-
-    {
-      "position":{
-        "x": 1000,
-        "y": 441
-      },
-      "type":4,
-      "assetPath":"images/ornament4.jpg"
+  {
+    "position": {
+      "x": 517.5,
+      "y": 1679.993836671803
     },
-
-    {
-      "position":{
-        "x": 900,
-        "y": 200
-      },
-      "type":2,
-      "assetPath":"images/ornament2.jpg"
-    }
-
+    "type": 1
+  },
+  {
+    "position": {
+      "x": 1010.3503320158364,
+      "y": 1696.4264243843502
+    },
+    "type": 2
+  },
+  {
+    "position": {
+      "x": 756,
+      "y": 1298.915254237288
+    },
+    "type": 3
+  },
+  {
+    "position": {
+      "x": 1803.5127251782296,
+      "y": 1422.8099666768135
+    },
+    "type": 2
+  },
+  {
+    "position": {
+      "x": 1707.786229451734,
+      "y": 1122.4946864138506
+    },
+    "type": 1
+  },
+  {
+    "position": {
+      "x": 1048.640930306435,
+      "y": 1056.368393142408
+    },
+    "type": 4
+  },
+  {
+    "position": {
+      "x": 1437.016998682503,
+      "y": 872.3469859520466
+    },
+    "type": 2
+  },
+  {
+    "position": {
+      "x": 1109.897985786455,
+      "y": 770.4776579352852
+    },
+    "type": 1
+  },
+  {
+    "position": {
+      "x": 1406.897985786455,
+      "y": 594.0832049306625
+    },
+    "type": 4
+  },
+  {
+    "position": {
+      "x": 1278.3845200500245,
+      "y": 376.0862865947612
+    },
+    "type": 2
+  },
+  {
+    "position": {
+      "x": 2038.726400391905,
+      "y": 1699.0503364765054
+    },
+    "type": 5
+  },
+  {
+    "position": {
+      "x": 1152.5725542380587,
+      "y": 1387.863895798539
+    },
+    "type": 6
+  },
+  {
+    "position": {
+      "x": 1456.1622978278024,
+      "y": 1657.4478711452264
+    },
+    "type": 3
+  },
+  {
+    "position": {
+      "x": 1406.931528597033,
+      "y": 1204.1004202526524
+    },
+    "type": 5
+  }
 ]
 
 var startingOrnaments = [
@@ -90,7 +105,7 @@ var startingOrnaments = [
 
 var finalOrnament = ORNAMENT_DATA[ORNAMENT_DATA.length - 1];
 
-var edges = [
+var g_edges = [
     [ORNAMENT_DATA[0], ORNAMENT_DATA[1]],
     [ORNAMENT_DATA[1], ORNAMENT_DATA[2]],
     [ORNAMENT_DATA[1], ORNAMENT_DATA[3]],

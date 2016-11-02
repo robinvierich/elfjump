@@ -1,3 +1,4 @@
+var DEBUG = true;
 
 var getTickerDt = function(ticker) {
   var ms = Math.min(ticker.elapsedMS, ticker._maxElapsedMS);
@@ -5,15 +6,29 @@ var getTickerDt = function(ticker) {
 };
 
 var ASSET_PATHS = {
-    BG: 'images/bg.jpg',
-    ELF: 'images/elfboy.jpg',
-    CANDY_CANE: 'images/candycane.gif',
+    BG: {
+      WALL: 'images/bg-1px.png',
+      FLOOR: 'images/bg-floor-1px.png',
+    },
+    TREE: 'images/tree.png',
+    ELF: {
+      STAND: 'images/elf-down.png',
+      JUMP: 'images/elf-up.png',
+      FALL: 'images/elf-down.png'
+    },
+    CANDY_CANE: 'images/candycane.png',
     ORNAMENTS: {
-      1: 'images/ornament1.jpg',
-      2: 'images/ornament2.jpg',
-      3: 'images/ornament3.jpg',
-      4: 'images/ornament4.jpg'
+      1: 'images/ball1.png',
+      2: 'images/ball2.png',
+      3: 'images/ball3.png',
+      4: 'images/ball4.png',
+      5: 'images/ball5.png',
+      6: 'images/ball6.png'
     }
+};
+
+var getOrnamentAssetPath = function(ornamentDatum) {
+  return ASSET_PATHS.ORNAMENTS[ornamentDatum.type];
 };
 
 //var ORNAMENT_DATA = [
@@ -55,9 +70,9 @@ var g_startTime = 0; // set in startGame
 var EMPTY_LIST = [];
 
 var canJumpToOrnament = function(currOrnament, nextOrnament) {
-  for (var i = 0; i < edges.length; i++) {
-    var edge = edges[i];
-        
+  for (var i = 0; i < g_edges.length; i++) {
+    var edge = g_edges[i];
+
     if ( edge.indexOf(currOrnament) !== -1 && edge.indexOf(nextOrnament) !== -1) {
       return true;
     }
@@ -73,8 +88,8 @@ var getAvailableOrnaments = function (currOrnament) {
 
     var availableOrnaments = [];
 
-    for (var i = 0; i < edges.length; i++) {
-        var edge = edges[i];
+    for (var i = 0; i < g_edges.length; i++) {
+        var edge = g_edges[i];
 
         var currOrnamentIndex = edge.indexOf(currOrnament);
         if (currOrnamentIndex == -1) { continue; }
@@ -97,10 +112,10 @@ var linear = function(t, start, end) {
 
 //   var t2 = t * 2;
 
-//   if (t2 < 1) { 
+//   if (t2 < 1) {
 //     return ((end - start) / 2) * (Math.pow(2, 10 * (t2 - 1)) + start);
 //   } else {
-//     return ((end - start) / 2) * (-Math.pow(2, -10 * (t2 - 1)) + 2) + start; 
+//     return ((end - start) / 2) * (-Math.pow(2, -10 * (t2 - 1)) + 2) + start;
 //   }
 // };
 
@@ -124,7 +139,7 @@ var linear = function(t, start, end) {
 
 // fast -> slow -> fast
 var lutEasing = function (lut, t) {
-  var idx = Math.floor(linear(t, 0, lut.length)); 
+  var idx = Math.floor(linear(t, 0, lut.length));
   return lut[idx];
 };
 
@@ -207,7 +222,7 @@ var updateTween = function (dt, tween) {
       obj[prop] = newVal;
     }
   }
-  
+
   tween.t = Math.min(tween.t + dt, tween.duration);
 
   if (tween.t >= tween.duration && tween.onComplete) {
@@ -278,7 +293,7 @@ var processKeyDown = function(dt, event, sceneIndex) {
     case 'ArrowRight':
       elf.x += dt * ELF_SPEED;
       break;
-    
+
     default:
       var ornament = keyToOrnamentMap[event.key];
       if (!ornament) { break; }
@@ -288,13 +303,18 @@ var processKeyDown = function(dt, event, sceneIndex) {
 }
 
 var createOrnament = function(ornamentContainer, ornamentDatum) {
-  var ornament = PIXI.Sprite.fromFrame(ornamentDatum.assetPath);
+  var ornament = PIXI.Sprite.fromFrame(getOrnamentAssetPath(ornamentDatum));
   ornament.position.set(ornamentDatum.position.x, ornamentDatum.position.y);
   ornament.anchor.set(0.5);
   ornament.scale.set(0.5);
   ornamentContainer.addChild(ornament);
-  g_ornamentSpriteToData.set(ornament, ornamentDatum);  
-  g_ornamentDataToSprite.set(ornamentDatum, ornament);  
+  g_ornamentSpriteToData.set(ornament, ornamentDatum);
+  g_ornamentDataToSprite.set(ornamentDatum, ornament);
+
+  if (DEBUG) {
+    var ornamentKeyText = new PIXI.Text(ornamentDatum.type.toString(), {fontFamily: 'Arial', fontSize: 72, fill: 0x220000, align: 'left' });
+    ornament.addChild(ornamentKeyText);
+  }
 };
 
 var removeOrnament = function(ornamentSprite) {
@@ -312,7 +332,6 @@ var serializeOrnament = function(ornamentSprite) {
       y: ornamentSprite.y
     },
     type: ornamentDatum.type,
-    assetPath: ornamentDatum.assetPath,
   };
 };
 
@@ -350,32 +369,43 @@ var loadOrnaments = function(sceneIndex) {
 var g_ornamentDragging = null;
 
 var getWorldCoordsFromMouseEvent = function(event, worldContainer) {
-
   return event.getLocalPosition(worldContainer);
 }
 
-var mouseHitSprite = function(sprite, mouseEvent, worldContainer) {
+var hitSprite = function(sprite, worldCoords, worldContainer) {
   var spriteScreenBounds = sprite.getBounds();
   var spriteWorldBounds = new PIXI.Rectangle(
-    spriteScreenBounds.x - worldContainer.x, 
+    spriteScreenBounds.x - worldContainer.x,
     spriteScreenBounds.y - worldContainer.y,
-    spriteScreenBounds.width, 
+    spriteScreenBounds.width,
     spriteScreenBounds.height
   );
-
-  var worldCoords = getWorldCoordsFromMouseEvent(mouseEvent, sceneIndex.worldContainer);
 
   return spriteWorldBounds.contains(worldCoords.x, worldCoords.y);
 };
 
-var processMouseDown = function(event, sceneIndex) {
-  var worldCoords = getWorldCoordsFromMouseEvent(event, sceneIndex.worldContainer);  
+var g_edgeLinkSourceOrnament = null;
 
-  if (event.originalEvent.ctrlKey) {
-    var strType = window.prompt("Enter type (1, 2, 3, or 4)");
+var findOrnamentAtWorldPosition = function(worldCoords, worldContainer) {
+  for (var i = 0; i < sceneIndex.ornamentContainer.children.length; i++) {
+    var ornament = sceneIndex.ornamentContainer.children[i];
+
+    if (hitSprite(ornament, worldCoords, worldContainer)) {
+      return ornament;
+    }
+  }
+
+  return null;
+};
+
+var processMouseDown = function(event, sceneIndex) {
+  var worldCoords = getWorldCoordsFromMouseEvent(event, sceneIndex.worldContainer);
+
+  if (event.originalEvent.altKey) {
+    var strType = window.prompt("Enter type (1, 2, 3, 4, 5, or 6)");
     var type = parseInt(strType.trim(), 10);
-    if (type < 1 || type > 4) {
-      alert('Invalid type! Please enter number from 1 - 4');
+    if (type < 1 || type > 6) {
+      alert('Invalid type! Please enter number from 1 - 6');
     }
     createOrnament(sceneIndex.ornamentContainer, {
       position: {
@@ -387,19 +417,22 @@ var processMouseDown = function(event, sceneIndex) {
     });
   }
 
-  for (var i = 0; i < sceneIndex.ornamentContainer.children.length; i++) {
-    var ornament = sceneIndex.ornamentContainer.children[i];
-    
-    if (mouseHitSprite(ornament, event, sceneIndex.worldContainer)) {
-      g_ornamentDragging = ornament;
-      break;
-    }
+  g_ornamentDragging = findOrnamentAtWorldPosition(worldCoords, sceneIndex.worldContainer);
+  if (!g_ornamentDragging) {
+    console.warn("couldn't find ornament at position {x: " + worldCoords.x + ", y: " + worldCoords.y + "}");
+    return;
   }
 
-  if (event.originalEvent.shiftKey && g_ornamentDragging) {
+  if (event.originalEvent.metaKey) {
+    g_edgeLinkSourceOrnament = g_ornamentDragging;
+    g_ornamentDragging = null;
+  }
+
+  if (event.originalEvent.shiftKey && !event.originalEvent.metaKey) {
     removeOrnament(g_ornamentDragging);
     g_ornamentDragging = null;
   }
+
 };
 
 var processMouseMove = function(event, sceneIndex) {
@@ -412,11 +445,63 @@ var processMouseMove = function(event, sceneIndex) {
 
 };
 
+var findEdgeBetweenOrnaments = function(ornament1Sprite, ornament2Sprite) {
+  for (var i = 0; i < g_edges.length; i++) {
+    var edge = g_edges[i];
+    var ornament1Datum = g_ornamentSpriteToData.get(ornament1Sprite);
+    var ornament2Datum = g_ornamentSpriteToData.get(ornament2Sprite);
+    if (
+      edge[0] === ornament1Datum && edge[1] === ornament2Datum ||
+      edge[0] === ornament2Datum && edge[1] === ornament1Datum
+    ) {
+      return edge;
+    }
+  }
+
+  return null;
+};
+
+var addEdge = function(ornament1Sprite, ornament2Sprite) {
+  var ornament1Datum = g_ornamentSpriteToData.get(ornament1Sprite);
+  var ornament2Datum = g_ornamentSpriteToData.get(ornament2Sprite);
+
+  g_edges.push([ornament1Datum, ornament2Datum])
+};
+
+var removeEdge = function(ornament1Sprite, ornament2Sprite) {
+  var ornament1Datum = g_ornamentSpriteToData.get(ornament1Sprite);
+  var ornament2Datum = g_ornamentSpriteToData.get(ornament2Sprite);
+
+  var edge = findEdgeBetweenOrnaments(ornament1Sprite, ornament2Sprite);
+  if (!edge) { return; }
+
+  g_edges.splice(g_edges.indexOf(edge), 1);
+};
+
 var processMouseUp = function(event, sceneIndex) {
   if (event.originalEvent.buttons & 1) { return; } // left button in still down
 
-  saveOrnaments(sceneIndex);
+  if (g_edgeLinkSourceOrnament) {
+    var worldCoords = getWorldCoordsFromMouseEvent(event, sceneIndex.worldContainer);
+    var targetOrnament = findOrnamentAtWorldPosition(worldCoords, sceneIndex.worldContainer);
+
+    if (!targetOrnament) { return; }
+    if (targetOrnament === g_edgeLinkSourceOrnament) { return; }
+    var edge = findEdgeBetweenOrnaments(g_edgeLinkSourceOrnament, targetOrnament);
+    if (event.originalEvent.shiftKey) {
+      if (edge) {
+        removeEdge(g_edgeLinkSourceOrnament, targetOrnament);
+      }
+    } else {
+      if (!edge) {
+        addEdge(g_edgeLinkSourceOrnament, targetOrnament);
+      }
+    }
+  }
+
+  //saveOrnaments(sceneIndex);
   g_ornamentDragging = null;
+  g_edgeLinkSourceOrnament = null;
 };
 
 var processInput = function(dt, sceneIndex) {
@@ -547,13 +632,42 @@ var checkForWin = function () {
   }
 }
 
-var update = function (dt, sceneIndex) {
-   processInput(dt, sceneIndex);
-   followElf(dt, sceneIndex);
+var drawEdges = function(sceneIndex) {
+  if (!sceneIndex.debugGraphics) {
+    return;
+  }
 
-   for (var i = 0; i < g_elfJumpTweens.length; i++) {
-     updateTween(dt, g_elfJumpTweens[i]);
-   }
+  var graphics = sceneIndex.debugGraphics;
+
+  graphics.lineStyle(10, 0x000000);
+  graphics.beginFill(0x000000, 1);
+
+  for (var i = 0; i < g_edges.length; i++) {
+    var edge = g_edges[i];
+
+    var ornament1Sprite = g_ornamentDataToSprite.get(edge[0]);
+    var ornament2Sprite = g_ornamentDataToSprite.get(edge[1]);
+
+    graphics.moveTo(ornament1Sprite.x, ornament1Sprite.y);
+    graphics.lineTo(ornament2Sprite.x, ornament2Sprite.y);
+  }
+
+  graphics.endFill();
+};
+
+var update = function (dt, sceneIndex) {
+  processInput(dt, sceneIndex);
+  followElf(dt, sceneIndex);
+
+  if (DEBUG && sceneIndex.debugGraphics) {
+    sceneIndex.debugGraphics.clear();
+    drawEdges(sceneIndex);
+  }
+
+
+  for (var i = 0; i < g_elfJumpTweens.length; i++) {
+    updateTween(dt, g_elfJumpTweens[i]);
+  }
 
   collectCandyCanes(sceneIndex);
   updateScoreText(sceneIndex);
@@ -566,15 +680,20 @@ var run = function(renderer, sceneIndex) {
   renderer.render(sceneIndex.root);
 };
 
-var setupElf = function(elf, bg) {
+var setupElf = function(elf, worldContainer) {
   elf.scale.set(0.25);
   elf.anchor.set(0.5, 1); // anchor at feet
   elf.x = WIDTH / 2;
-  elf.y = bg.height - 1;
+  elf.y = worldContainer.height - elf.height - 1;
 };
 
-var setupBg = function(bg) {
-  bg.scale.set(5);
+var setupBg = function(bgWall, bgFloor, worldContainer) {
+  bgWall.height = worldContainer.height;
+  bgWall.width = worldContainer.width;
+
+  bgFloor.anchor.set(0, 1);
+  bgFloor.y = worldContainer.height;
+  bgFloor.width = worldContainer.width;
 }
 
 var setupScore = function(scoreContainer, scoreSymbol, scoreText) {
@@ -589,7 +708,7 @@ var setupScore = function(scoreContainer, scoreSymbol, scoreText) {
 
 var setupOrnaments = function(ornamentContainer) {
 //   ornamentContainer.children.forEach(function(ornament) {
-      
+
 //   });
 };
 
@@ -607,9 +726,9 @@ var setupCandyCanes = function(candyCaneContainer) {
 };
 
 var setupScene = function(sceneIndex) {
-  setupBg(sceneIndex.bg);
+  setupBg(sceneIndex.bgWall, sceneIndex.bgFloor, sceneIndex.worldContainer);
   setupScore(sceneIndex.scoreContainer, sceneIndex.scoreSymbol, sceneIndex.scoreText);
-  setupElf(sceneIndex.elf, sceneIndex.bg);
+  setupElf(sceneIndex.elf, sceneIndex.worldContainer);
   setupOrnaments(sceneIndex.ornamentContainer);
   setupCandyCanes(sceneIndex.candyCaneContainer);
   setupCamera(sceneIndex.worldContainer);
@@ -634,8 +753,22 @@ var buildSceneGraph = function() {
     var worldContainer = new PIXI.Container();
     root.addChild(worldContainer);
 
-      var bg = PIXI.Sprite.fromFrame(ASSET_PATHS.BG);
-      worldContainer.addChild(bg);
+    var tree = PIXI.Sprite.fromFrame(ASSET_PATHS.TREE);
+    // NOT ADDED YET! JUST NEED WIDTH/HEIGHT FOR BG
+
+      var bgContainer = new PIXI.Container();
+      worldContainer.addChild(bgContainer);
+
+        var bgWall = PIXI.extras.TilingSprite.fromFrame(ASSET_PATHS.BG.WALL);
+        bgContainer.addChild(bgWall);
+        // update scale/height
+
+        var bgFloor = PIXI.Sprite.fromFrame(ASSET_PATHS.BG.FLOOR);
+        bgContainer.addChild(bgFloor);
+        // update scale/height
+
+
+      worldContainer.addChild(tree);
 
       var scoreContainer = new PIXI.Container();
       worldContainer.addChild(scoreContainer);
@@ -651,29 +784,37 @@ var buildSceneGraph = function() {
         ORNAMENT_DATA.forEach(function(ornamentDatum) {
           createOrnament(ornamentContainer, ornamentDatum);
         });
-      
+
       var candyCaneContainer = new PIXI.Container();
       worldContainer.addChild(candyCaneContainer);
-        
+
         CANDY_CANE_DATA.forEach(function(candyCaneDatum) {
           var candyCane =  PIXI.Sprite.fromFrame(candyCaneDatum.assetPath);
           candyCane.position.set(candyCaneDatum.position.x, candyCaneDatum.position.y);
           candyCaneContainer.addChild(candyCane);
         });
 
-      var elf = PIXI.Sprite.fromFrame(ASSET_PATHS.ELF);
+      var elf = PIXI.Sprite.fromFrame(ASSET_PATHS.ELF.STAND);
       worldContainer.addChild(elf);
+
+      if (DEBUG) {
+        var debugGraphics = new PIXI.Graphics();
+        worldContainer.addChild(debugGraphics);
+      }
+
 
   return {
     root: root,
       worldContainer: worldContainer,
-        bg: bg,
+        bgWall: bgWall,
+        bgFloor: bgFloor,
         scoreContainer: scoreContainer,
         scoreSymbol: scoreSymbol,
         scoreText: scoreText,
         ornamentContainer: ornamentContainer,
         candyCaneContainer: candyCaneContainer,
         elf: elf,
+        debugGraphics: debugGraphics,
   };
 };
 
@@ -713,7 +854,11 @@ var loadAssetObject = function(loader, assetObj) {
     if (typeof assetDesc === 'object') {
       loadAssetObject(loader, assetDesc);
     } else {
-      loader.add(assetObj[reference]);  
+      var assetPath = assetObj[reference]
+      if (loader.resources.hasOwnProperty(assetPath)) {
+        continue;
+      }
+      loader.add(assetPath);
     }
   }
 }
