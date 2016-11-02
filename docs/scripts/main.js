@@ -57,6 +57,7 @@ var WIDTH = 1920;
 var FPS = 60;
 
 var ELF_SPEED = 10000; // units/sec
+var ELF_JUMP_DURATION = 0.5;
 
 var TOP_OF_TREE_OFFSET = 200;
 
@@ -64,9 +65,9 @@ var TOP_OF_TREE_OFFSET = 200;
 var g_ornamentSpriteToData = new Map();
 var g_ornamentDataToSprite = new Map();
 
-var eventQueue = [];
+var g_eventQueue = [];
 var g_currOrnamentDatum = null;
-var g_elfJumpTweens = [];
+var g_tweens = [];
 var g_score = 0;
 var g_startTime = 0; // set in startGame
 
@@ -211,6 +212,23 @@ var createTween = function (obj, start, end, duration, easingFunc, onComplete) {
   return tween;
 };
 
+var startTween = function(tween) {
+  var onComplete = tween.onComplete;
+
+  tween.onComplete = function(t) {
+    if (onComplete) { onComplete(t); }
+    g_tweens.splice(g_tweens.indexOf(tween), 1);
+  }
+
+  g_tweens.push(tween);
+
+  return tween;
+};
+
+var createTimerTween = function(duration, onComplete) {
+  return createTween({}, {}, null, duration, linear, onComplete);
+};
+
 var updateTween = function (dt, tween) {
   var obj = tween.obj;
 
@@ -234,8 +252,6 @@ var updateTween = function (dt, tween) {
 };
 
 var jumpToOrnament = function (elf, ornamentDatum, worldContainer) {
-  var duration = 0.5;
-
   var ornamentSprite = g_ornamentDataToSprite.get(ornamentDatum);
 
   var startPoint = new PIXI.Point(elf.x, elf.y);
@@ -244,14 +260,19 @@ var jumpToOrnament = function (elf, ornamentDatum, worldContainer) {
     ornamentSprite.y// + worldContainer.y
   );
 
-  var bezierEasing = createJumpEasingFn(startPoint.x, startPoint.y, endPoint.x, endPoint.y, duration);
+  var bezierEasing = createJumpEasingFn(startPoint.x, startPoint.y, endPoint.x, endPoint.y, ELF_JUMP_DURATION);
 
-  var jumpTween = createTween(elf.position, startPoint, endPoint, duration, bezierEasing, function (tween) {
-    var tweenIdx = g_elfJumpTweens.indexOf(tween);
-    g_elfJumpTweens.splice(tweenIdx, 1);
+  var jumpTexture = PIXI.utils.TextureCache[ASSET_PATHS.ELF.JUMP];
+
+  elf.setTexture(jumpTexture);
+
+  var jumpTween = createTween(elf.position, startPoint, endPoint, ELF_JUMP_DURATION, bezierEasing, function (tween) {
     g_currOrnamentDatum = ornamentDatum;
+    var standTexture = PIXI.utils.TextureCache[ASSET_PATHS.ELF.STAND];
+    elf.setTexture(standTexture);
   });
-  g_elfJumpTweens.push(jumpTween);
+
+  startTween(jumpTween);
 };
 
 
@@ -260,7 +281,7 @@ var getKeyForOrnament = function (ornament) {
 };
 
 var isJumping = function () {
-  return g_elfJumpTweens.length > 0;
+  return g_tweens.length > 0;
 }
 
 var processKeyDown = function(dt, event, sceneIndex) {
@@ -524,8 +545,8 @@ var processMouseUp = function(event, sceneIndex) {
 };
 
 var processInput = function(dt, sceneIndex) {
-  while (eventQueue.length) {
-    var eventData = eventQueue.shift();
+  while (g_eventQueue.length) {
+    var eventData = g_eventQueue.shift();
     switch (eventData.type) {
     case 'keydown':
       processKeyDown(dt, eventData.event, sceneIndex);
@@ -561,10 +582,7 @@ var normalizeVector = function(vector) {
 var followElf = function(dt, sceneIndex) {
   var elf = sceneIndex.elf;
   var elfBounds = elf.getLocalBounds();
-  var elfPos = elf.position; //new PIXI.Point(
-  //   elf.x + (elfBounds.width * elf.anchor.x) + (elfBounds.width / 2),
-  //   elf.y - (elfBounds.height * elf.anchor.y) + (elfBounds.height / 2)
-  // );
+  var elfPos = elf.position;
 
   var worldContainer = sceneIndex.worldContainer;
 
@@ -685,8 +703,8 @@ var update = function (dt, sceneIndex) {
   }
 
 
-  for (var i = 0; i < g_elfJumpTweens.length; i++) {
-    updateTween(dt, g_elfJumpTweens[i]);
+  for (var i = 0; i < g_tweens.length; i++) {
+    updateTween(dt, g_tweens[i]);
   }
 
   collectCandyCanes(sceneIndex);
@@ -848,12 +866,12 @@ var buildSceneGraph = function() {
 var addKeyHandlers = function(renderer, worldContainer) {
   window.addEventListener('keydown', function(e) {
     // push keydown event to event queue
-    eventQueue.push({type: 'keydown', event: e});
+    g_eventQueue.push({type: 'keydown', event: e});
   });
 
   window.addEventListener('keyup', function(e) {
     // push keyup event to event queue
-    eventQueue.push({type: 'keyup', event: e});
+    g_eventQueue.push({type: 'keyup', event: e});
   });
 
   var interactionManager = new PIXI.interaction.InteractionManager(renderer);
@@ -861,17 +879,17 @@ var addKeyHandlers = function(renderer, worldContainer) {
   interactionManager.on('mousedown', function(e) {
     // push keyup event to event queue
 
-    eventQueue.push({type: 'mousedown', event: interactionManager.mouse});
+    g_eventQueue.push({type: 'mousedown', event: interactionManager.mouse});
   });
 
   interactionManager.on('mousemove', function(e) {
     // push keyup event to event queue
-    eventQueue.push({type: 'mousemove', event: interactionManager.mouse});
+    g_eventQueue.push({type: 'mousemove', event: interactionManager.mouse});
   });
 
   interactionManager.on('mouseup', function(e) {
     // push keyup event to event queue
-    eventQueue.push({type: 'mouseup', event: interactionManager.mouse});
+    g_eventQueue.push({type: 'mouseup', event: interactionManager.mouse});
   });
 };
 
