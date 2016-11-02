@@ -634,6 +634,7 @@ var updateScoreText = function(sceneIndex) {
   var scoreContainer = sceneIndex.scoreContainer;
   var worldContainer = sceneIndex.worldContainer;
 
+  scoreContainer.x = -worldContainer.x;
   scoreContainer.y = -worldContainer.y;
 
   var scoreText = sceneIndex.scoreText;
@@ -651,7 +652,7 @@ var checkForWin = function () {
 
     alert('You win! Your score was ' + g_score + ' and your time was ' + Math.round(duration / 10) / 100 + ' seconds!');
 
-    PIXI.ticker.stop();
+    PIXI.ticker.shared.stop();
 
     window.location.reload();
   }
