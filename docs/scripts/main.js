@@ -335,6 +335,31 @@ var serializeOrnament = function(ornamentSprite) {
   };
 };
 
+var getEdgeStr = function(ornamentIdx1, ornamentIdx2) {
+  return "ORNAMENT_DATA[" + ornamentIdx1 + "], ORNAMENT_DATA[" + ornamentIdx2 + "]";
+}
+
+var serializeEdges = function(edges) {
+  var ornamentIdx1;
+  var ornamentIdx2;
+
+  var serializedEdges = "var g_edges = [\n";
+
+  for (var i = 0; i < edges.length; i++) {
+    var edge = edges[i];
+
+    var ornamentIdx1 = ORNAMENT_DATA.indexOf(edge[0]);
+    var ornamentIdx2 = ORNAMENT_DATA.indexOf(edge[1]);
+
+    var edgeStr = getEdgeStr(ornamentIdx1, ornamentIdx2);
+    serializedEdges += (edgeStr + "\n");
+  }
+
+  serializedEdges += "];"
+
+  return serializedEdges;
+};
+
 var serializeOrnaments = function(sceneIndex) {
   var ornaments = sceneIndex.ornamentContainer.children;
   var serializedOrnaments = [];
