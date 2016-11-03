@@ -1,4 +1,5 @@
 var DEBUG = true;
+var DEBUG_ORNAMENT_NUMBERS = true;
 
 var getTickerDt = function(ticker) {
   var ms = Math.min(ticker.elapsedMS, ticker._maxElapsedMS);
@@ -13,7 +14,7 @@ var ASSET_PATHS = {
     },
     TREE: 'images/tree.png',
     ELF: {
-      STAND: 'images/elf-down.png',
+      STAND: 'images/elf-idle.png',
       JUMP: 'images/elf-up.png',
       FALL: 'images/elf-down.png',
       PLACE_STAR: 'images/elf-place-star.png'
@@ -276,10 +277,23 @@ var jumpToPosition = function(elf, position, onComplete) {
   var bezierEasing = createJumpEasingFn(startPoint.x, startPoint.y, endPoint.x, endPoint.y, ELF_JUMP_DURATION);
 
   var jumpTexture = PIXI.utils.TextureCache[ASSET_PATHS.ELF.JUMP];
+  var fallTexture = PIXI.utils.TextureCache[ASSET_PATHS.ELF.FALL];
   elf.texture = jumpTexture;
+
+  if (endPoint.x < startPoint.x) {
+    elf.scale.x = -1;
+  } else if (endPoint.x > startPoint.x) {
+    elf.scale.x = 1;
+  }
 
   var jumpTween = createTween(elf.position, startPoint, endPoint, ELF_JUMP_DURATION, bezierEasing, onComplete);
   startTween(jumpTween);
+
+  var switchToFallTimerTween = createTimerTween((2/3) *   ELF_JUMP_DURATION, function() {
+    elf.texture = fallTexture;
+    elf.position.y -= 250;
+  });
+  startTween(switchToFallTimerTween);
 };
 
 var jumpToOrnament = function (elf, ornamentDatum) {
@@ -360,7 +374,7 @@ var createOrnament = function(ornamentContainer, ornamentDatum) {
   g_ornamentSpriteToData.set(ornament, ornamentDatum);
   g_ornamentDataToSprite.set(ornamentDatum, ornament);
 
-  if (DEBUG) {
+  if (DEBUG_ORNAMENT_NUMBERS) {
     var ornamentKeyText = new PIXI.Text(ornamentDatum.type.toString(), {fontFamily: 'Arial', fontSize: 256, fill: 0x220000, align: 'left' });
     ornamentKeyText.anchor.set(0.5, 0);
     ornamentKeyText.y = ornament.height / 4;
@@ -809,7 +823,7 @@ var showFinalMessage = function(sceneIndex, onComplete) {
 
   var finalMessageText = 'You win!\n' +
     'You did it in ' + (Math.round(gameTime / 10) / 100) + ' seconds\n' +
-    'and picked up' + g_score + ' candy ' + pluralizedCane + '!';
+    'and picked up ' + g_score + ' candy ' + pluralizedCane + '!';
 
   sceneIndex.finalText.visible = true;
   sceneIndex.finalText.x = (WIDTH / 2) - sceneIndex.worldContainer.x;
@@ -930,7 +944,6 @@ var setupCandyCanes = function(candyCaneContainer) {
   candyCaneContainer.children.forEach(function(candyCane) {
     candyCane.anchor.set(0.5);
     candyCane.scale.set(1);
-    candyCane.rotation = Math.PI * -0.3;
   });
 
   candyCaneContainer.y += TOP_OF_TREE_OFFSET;
