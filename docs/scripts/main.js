@@ -51,7 +51,7 @@ var findFinalOrnament = function(ornamentData) {
 //  { id: 2, position: { x: 700, y: 1400 }, assetPath: ASSET_PATHS.ORNAMENTS[3], type: 3 },
 //];
 
-//var startingOrnaments = [
+//var g_startingOrnaments = [
 //    ORNAMENT_DATA[0]
 //];
 
@@ -59,10 +59,6 @@ var findFinalOrnament = function(ornamentData) {
 //    [ORNAMENT_DATA[0], ORNAMENT_DATA[1]],1
 //    [ORNAMENT_DATA[1], ORNAMENT_DATA[2]],
 //];
-
-var CANDY_CANE_DATA = [
-  { position: { x: 800, y: 1500 }, assetPath: ASSET_PATHS.CANDY_CANE},
-]
 
 var HEIGHT = 1080;
 var WIDTH = 1920;
@@ -79,6 +75,7 @@ var CAMERA_MOVEMENT_CUTOFF = 10; // how many px away from center until we skip m
 
 var g_ornamentSpriteToData = new Map();
 var g_ornamentDataToSprite = new Map();
+var g_candyCaneSpriteToData = new Map();
 
 var g_eventQueue = [];
 var g_currOrnamentDatum = null;
@@ -89,6 +86,7 @@ var g_startTime = 0; // set in startGame
 var EMPTY_LIST = [];
 
 var g_finalOrnament = findFinalOrnament(ORNAMENT_DATA);
+var g_startingOrnaments = [ORNAMENT_DATA[0]];
 
 var canJumpToOrnament = function(currOrnament, nextOrnament) {
   for (var i = 0; i < g_edges.length; i++) {
@@ -104,7 +102,7 @@ var canJumpToOrnament = function(currOrnament, nextOrnament) {
 
 var getAvailableOrnaments = function (currOrnament) {
     if (currOrnament == null) {
-        return startingOrnaments;
+        return g_startingOrnaments;
     }
 
     var availableOrnaments = [];
@@ -391,16 +389,19 @@ var removeOrnament = function(ornamentSpriteToRemove, sceneIndex) {
   ORNAMENT_DATA.splice(idx, 1);
 };
 
-var serializeOrnament = function(ornamentSprite) {
-  var ornamentDatum = g_ornamentSpriteToData.get(ornamentSprite);
-  return {
-    position: {
-      x: ornamentSprite.x,
-      y: ornamentSprite.y
-    },
-    type: ornamentDatum.type,
-    final: ornamentDatum.final || false,
-  };
+var createCandyCane = function(candyCaneContainer, candyCaneDatum) {
+  var candyCane = PIXI.Sprite.fromFrame(candyCaneDatum.assetPath);
+  candyCane.position.set(candyCaneDatum.position.x, candyCaneDatum.position.y);
+  candyCane.anchor.set(0.5);
+  g_candyCaneSpriteToData.set(candyCane, candyCaneDatum);
+  candyCaneContainer.addChild(candyCane);
+};
+
+var removeCandyCane = function(candyCaneSpriteToRemove) {
+  var candyCaneDatum = g_candyCaneSpriteToData.get(candyCaneSpriteToRemove);
+  g_candyCaneSpriteToData.delete(candyCaneSpriteToRemove);
+  CANDY_CANE_DATA.splice(CANDY_CANE_DATA.indexOf(candyCaneDatum), 1);
+  candyCaneSpriteToRemove.parent.removeChild(candyCaneSpriteToRemove);
 };
 
 var getEdgeStr = function(ornamentIdx1, ornamentIdx2) {
@@ -411,7 +412,7 @@ var serializeEdges = function(edges) {
   var ornamentIdx1;
   var ornamentIdx2;
 
-  var serializedEdges = "var g_edges = [\n";
+  var serializedEdges = "[\n";
 
   for (var i = 0; i < edges.length; i++) {
     var edge = edges[i];
@@ -423,9 +424,42 @@ var serializeEdges = function(edges) {
     serializedEdges += (edgeStr + "\n");
   }
 
-  serializedEdges += "];"
+  serializedEdges += "]"
 
   return serializedEdges;
+};
+
+var serializeCandyCane = function(candyCaneSprite) {
+  var candyCaneDatum = g_candyCaneSpriteToData.get(candyCaneSprite);
+
+  return {
+    position: {
+      x: candyCaneSprite.x, y: candyCaneSprite.y
+    },
+    assetPath: candyCaneDatum.assetPath
+  }
+};
+
+var serializeCandyCanes = function(sceneIndex) {
+  var serializedCandyCanes = [];
+
+  sceneIndex.candyCaneContainer.children.forEach(function(candyCane) {
+    serializedCandyCanes.push(serializeCandyCane(candyCane));
+  });
+
+  return JSON.stringify(serializedCandyCanes);
+}
+
+var serializeOrnament = function(ornamentSprite) {
+  var ornamentDatum = g_ornamentSpriteToData.get(ornamentSprite);
+  return {
+    position: {
+      x: ornamentSprite.x,
+      y: ornamentSprite.y
+    },
+    type: ornamentDatum.type,
+    final: ornamentDatum.final || false,
+  };
 };
 
 var serializeOrnaments = function(sceneIndex) {
@@ -439,11 +473,25 @@ var serializeOrnaments = function(sceneIndex) {
   return JSON.stringify(serializedOrnaments);
 };
 
-var deserializeOrnaments = function(sceneIndex, serializedOrnaments) {
-  JSON.parse(serializedOrnaments).forEach(function(ornamentDatum) {
-    createOrnament(sceneIndex.ornamentContainer, ornamentDatum)
-  });
-}
+var serializeData = function(sceneIndex) {
+  var ornamentData = serializeOrnaments(sceneIndex);
+  var candyCaneData = serializeCandyCanes(sceneIndex);
+  var edgeData = serializeEdges(g_edges);
+
+  var fileContents =
+    "var ORNAMENT_DATA = " + ornamentData + ";\n" +
+    "var CANDY_CANE_DATA = " + candyCaneData + ";\n" +
+    "var g_edges = " + edgeData + ";\n";
+
+
+  return fileContents;
+};
+
+// var deserializeOrnaments = function(sceneIndex, serializedOrnaments) {
+//   JSON.parse(serializedOrnaments).forEach(function(ornamentDatum) {
+//     createOrnament(sceneIndex.ornamentContainer, ornamentDatum)
+//   });
+// }
 
 var g_ornamentDragging = null;
 
@@ -477,6 +525,19 @@ var findOrnamentAtWorldPosition = function(worldCoords, worldContainer) {
   return null;
 };
 
+var findCandyCaneAtWorldPosition = function(worldCoords, worldContainer) {
+  var candyCanes = sceneIndex.candyCaneContainer.children;
+  for (var i = 0; i < candyCanes.length; i++) {
+    var candyCane = candyCanes[i];
+
+    if (hitSprite(candyCane, worldCoords, worldContainer)) {
+      return candyCane;
+    }
+  }
+
+  return null;
+};
+
 var processMouseDown = function(event, sceneIndex) {
   var worldCoords = getWorldCoordsFromMouseEvent(event, sceneIndex.worldContainer);
 
@@ -504,7 +565,25 @@ var processMouseDown = function(event, sceneIndex) {
   g_ornamentDragging = findOrnamentAtWorldPosition(worldCoords, sceneIndex.worldContainer);
   if (!g_ornamentDragging) {
     console.warn("couldn't find ornament at position {x: " + worldCoords.x + ", y: " + worldCoords.y + "}");
-    return;
+
+    if (event.originalEvent.metaKey) {
+      var candyCaneDatum = {
+        position: {
+          x: worldCoords.x - sceneIndex.candyCaneContainer.x,
+          y: worldCoords.y - sceneIndex.candyCaneContainer.y
+        },
+        assetPath: ASSET_PATHS.CANDY_CANE
+      };
+
+      CANDY_CANE_DATA.push(candyCaneDatum);
+
+      createCandyCane(sceneIndex.candyCaneContainer, candyCaneDatum);
+    } else if (event.originalEvent.shiftKey) {
+      var candyCaneSpriteToRemove = findCandyCaneAtWorldPosition(worldCoords, sceneIndex.worldContainer);
+      if (candyCaneSpriteToRemove) {
+        removeCandyCane(candyCaneSpriteToRemove);
+      }
+    }
   }
 
   if (event.originalEvent.metaKey) {
@@ -722,18 +801,35 @@ var placeStar = function(sceneIndex, onComplete) {
   });
 };
 
-var won = false;
+var showFinalMessage = function(sceneIndex, onComplete) {
+  var duration = 0.5;
+  var gameTime = Date.now() - g_startTime;
 
+  var pluralizedCane = (g_score === 1) ? 'cane' : 'canes';
+
+  var finalMessageText = 'You win!\n' +
+    'You did it in ' + (Math.round(gameTime / 10) / 100) + ' seconds\n' +
+    'and picked up' + g_score + ' candy ' + pluralizedCane + '!';
+
+  sceneIndex.finalText.visible = true;
+  sceneIndex.finalText.x = (WIDTH / 2) - sceneIndex.worldContainer.x;
+  sceneIndex.finalText.y = (HEIGHT / 2) - sceneIndex.worldContainer.y;
+  sceneIndex.finalText.text = finalMessageText;
+
+  var textTween = createTween(finalMessageText.scale, {x: 0, y:0}, {x:1, y:1}, duration, linear, onComplete);
+  startTween(textTween);
+};
+
+
+var won = false;
 var checkForWin = function (sceneIndex) {
   if (!won && g_currOrnamentDatum === g_finalOrnament) {
     won = true;
-    var duration = Date.now() - g_startTime;
 
     placeStar(sceneIndex, function() {
-      alert('You win! Your score was ' + g_score + ' and your time was ' + Math.round(duration / 10) / 100 + ' seconds!');
-      PIXI.ticker.shared.stop();
-
-      window.location.reload();
+      showFinalMessage(sceneIndex, function() {
+        PIXI.ticker.shared.stop();
+      });
     });
   }
 }
@@ -867,8 +963,9 @@ var startGame = function(renderer, sceneIndex) {
   PIXI.ticker.shared.add(run.bind(null, renderer, sceneIndex));
 
   g_startTime = Date.now();
-};
 
+  jumpToOrnament(sceneIndex.elf, g_startingOrnaments[0]);
+};
 
 // returns an index of {name: element}
 var buildSceneGraph = function() {
@@ -917,9 +1014,7 @@ var buildSceneGraph = function() {
         worldContainer.addChild(candyCaneContainer);
 
           CANDY_CANE_DATA.forEach(function(candyCaneDatum) {
-            var candyCane =  PIXI.Sprite.fromFrame(candyCaneDatum.assetPath);
-            candyCane.position.set(candyCaneDatum.position.x, candyCaneDatum.position.y);
-            candyCaneContainer.addChild(candyCane);
+            createCandyCane(candyCaneContainer, candyCaneDatum);
           });
 
         var elf = PIXI.Sprite.fromFrame(ASSET_PATHS.ELF.STAND);
@@ -927,6 +1022,16 @@ var buildSceneGraph = function() {
 
         var star = PIXI.Sprite.fromFrame(ASSET_PATHS.STAR);
         worldContainer.addChild(star);
+
+        var finalMessageContainer = new PIXI.Container();
+        worldContainer.addChild(finalMessageContainer);
+
+          var finalText = new PIXI.Text('You Won!', {
+            fontFamily: 'Arial', fontSize: 128, fill: 0x000000, align: 'left'
+          });
+          finalMessageContainer.addChild(finalText);
+          finalText.anchor.set(0.5);
+          finalText.visible = false;
 
         if (DEBUG) {
           var debugGraphics = new PIXI.Graphics();
@@ -948,6 +1053,8 @@ var buildSceneGraph = function() {
         candyCaneContainer: candyCaneContainer,
         elf: elf,
         star: star,
+        finalMessageContainer: finalMessageContainer,
+        finalText: finalText,
         debugGraphics: debugGraphics,
   };
 };
