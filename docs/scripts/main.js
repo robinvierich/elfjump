@@ -142,9 +142,9 @@ var linear = function(t, start, end) {
 //   return (end - start) * (t * t) + start;
 // };
 
-// var quadOut = function(t, start, end) {
-//   return (start - end) * (t * (t - 2)) + start;
-// };
+var quadOut = function(t, start, end) {
+  return (start - end) * (t * (t - 2)) + start;
+};
 
 // var quadOutIn = function(t, start, end) {
 //   var t2 = t * 2;
@@ -814,9 +814,10 @@ var showFinalMessage = function(sceneIndex, onComplete) {
   sceneIndex.finalText.visible = true;
   sceneIndex.finalText.x = (WIDTH / 2) - sceneIndex.worldContainer.x;
   sceneIndex.finalText.y = (HEIGHT / 2) - sceneIndex.worldContainer.y;
+  sceneIndex.finalText.scale.set(0);
   sceneIndex.finalText.text = finalMessageText;
 
-  var textTween = createTween(finalMessageText.scale, {x: 0, y:0}, {x:1, y:1}, duration, linear, onComplete);
+  var textTween = createTween(sceneIndex.finalText.scale, {x: 0, y:0}, {x:1, y:1}, duration, quadOut, onComplete);
   startTween(textTween);
 };
 
