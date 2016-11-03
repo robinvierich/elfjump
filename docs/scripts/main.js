@@ -291,7 +291,7 @@ var jumpToPosition = function(elf, position, onComplete) {
 
   var switchToFallTimerTween = createTimerTween((2/3) *   ELF_JUMP_DURATION, function() {
     elf.texture = fallTexture;
-    elf.position.y -= 250;
+    // elf.position.y -= 250;
   });
   startTween(switchToFallTimerTween);
 };
