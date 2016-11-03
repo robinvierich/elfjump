@@ -1,4 +1,4 @@
-var DEBUG = true;
+var DEBUG = false;
 var DEBUG_ORNAMENT_NUMBERS = true;
 
 var getTickerDt = function(ticker) {
